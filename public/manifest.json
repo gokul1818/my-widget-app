@@ -1,0 +1,19 @@
+{
+  "name": "Analytics & Timer Widget",
+  "short_name": "Widget",
+  "description": "Mobile-first analytics and session timer widget",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatTimer } from '../utils/formatters';
 import { timerPresets } from '../utils/mockData';
+import { syncWidgetStateToNative } from '../utils/nativeWidgetSync';
 
 export const TIMER_PRESETS = timerPresets;
 
@@ -33,6 +34,15 @@ export function Timer({
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
+
+  // Sync state to Native Home Screen Widget storage
+  useEffect(() => {
+    syncWidgetStateToNative({
+      seconds,
+      isRunning,
+      mode: activePreset.mode,
+    });
+  }, [seconds, isRunning, activePreset.mode]);
 
   // Timer interval driver
   useEffect(() => {

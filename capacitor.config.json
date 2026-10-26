@@ -1,0 +1,9 @@
+{
+  "appId": "com.mywidget.app",
+  "appName": "Analytics & Timer Widget",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
+
