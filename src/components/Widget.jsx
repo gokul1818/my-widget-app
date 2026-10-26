@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StatCard } from './StatCard';
 import { TrendChart } from './TrendChart';
 import { BreakdownList } from './BreakdownList';
+import { Timer } from './Timer';
 import {
   WidgetLoadingSkeleton,
   WidgetEmptyState,
@@ -23,6 +24,8 @@ import { timeframes } from '../utils/mockData';
  * @param {Function} [props.onTimeframeChange] - Callback for timeframe pills
  * @param {string} [props.activeTimeframe='7D'] - Selected timeframe pill
  * @param {string} [props.className=''] - Additional custom CSS class names
+ * @param {boolean} [props.showTimer=true] - Toggle display of the embedded simple timer
+ * @param {string} [props.timerTitle='Session Timer'] - Display label for timer
  */
 export function Widget({
   title = 'Performance Analytics',
@@ -35,6 +38,8 @@ export function Widget({
   onTimeframeChange,
   activeTimeframe = '7D',
   className = '',
+  showTimer = true,
+  timerTitle = 'Session Timer',
 }) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(activeTimeframe);
   const [searchQuery, setSearchQuery] = useState('');
@@ -160,6 +165,9 @@ export function Widget({
           <WidgetEmptyState onAction={onRefresh} />
         ) : (
           <div className="widget-content">
+            {/* Simple Responsive Timer for Mobile & Web */}
+            {showTimer && <Timer title={timerTitle} />}
+
             {/* KPI Cards Grid */}
             <div className="widget-kpi-grid">
               {filteredKpis.length > 0 ? (

@@ -140,7 +140,28 @@ function DashboardPage() {
 | `onRefresh` | `() => void` | `undefined` | Callback invoked when user clicks the refresh icon. |
 | `onTimeframeChange` | `(tf: string) => void` | `undefined` | Callback invoked when user selects a timeframe pill (`Today`, `7D`, `30D`, `90D`). |
 | `activeTimeframe` | `string` | `'7D'` | Currently active timeframe identifier. |
+| `showTimer` | `boolean` | `true` | Embeds the responsive timer (Stopwatch / Countdown). |
+| `timerTitle` | `string` | `'Session Timer'` | Label title for the embedded timer. |
 | `className` | `string` | `''` | Optional extra class names for customization. |
+
+### Standalone `<Timer />` Usage
+
+You can also import and use the Timer as an independent widget:
+
+```jsx
+import { Timer } from './components/Timer';
+import './styles/widget.css';
+
+function MyTimerWidget() {
+  return (
+    <Timer
+      title="Focus Timer"
+      initialSeconds={0}
+      onComplete={() => alert('Timer completed!')}
+    />
+  );
+}
+```
 
 ---
 

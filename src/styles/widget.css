@@ -260,6 +260,259 @@
 }
 
 /* ==========================================================================
+   Timer Component Styles (Mobile-First & Web)
+   ========================================================================== */
+
+.widget-timer-card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  transition: all 0.2s ease;
+}
+
+.widget-timer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.widget-timer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.widget-timer-icon {
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.widget-timer-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Status Badge */
+.widget-timer-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.widget-timer-status-badge.running {
+  background-color: var(--success-bg);
+  color: var(--success-color);
+}
+
+.widget-timer-status-badge.paused {
+  background-color: var(--accent-light);
+  color: var(--accent-color);
+}
+
+.widget-timer-status-badge.completed {
+  background-color: var(--danger-bg);
+  color: var(--danger-color);
+  animation: timerPulse 1.5s infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.widget-timer-status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background-color: currentColor;
+}
+
+.widget-timer-status-badge.running .widget-timer-status-dot {
+  animation: dotBlink 1.2s ease-in-out infinite;
+}
+
+@keyframes dotBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Preset Buttons */
+.widget-timer-presets {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.75rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.widget-timer-presets::-webkit-scrollbar {
+  display: none;
+}
+
+.widget-timer-preset-btn {
+  padding: 0.35rem 0.65rem;
+  min-height: 36px;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-widget);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.widget-timer-preset-btn:hover {
+  background-color: var(--bg-card-hover);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.widget-timer-preset-btn.active {
+  background-color: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
+  font-weight: 600;
+}
+
+/* Display Area */
+.widget-timer-display-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 0;
+  background-color: var(--bg-widget);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.widget-timer-digits {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+  line-height: 1.1;
+  transition: color 0.2s ease;
+}
+
+.widget-timer-digits.is-active {
+  color: var(--accent-color);
+}
+
+.widget-timer-digits.is-completed {
+  color: var(--danger-color);
+}
+
+.widget-timer-mode-label {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+/* Progress Track for Countdown */
+.widget-timer-progress-track {
+  width: 100%;
+  height: 0.375rem;
+  background-color: var(--border-subtle);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.widget-timer-progress-fill {
+  height: 100%;
+  background-color: var(--accent-color);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+/* Controls (Large touch targets: min-height 44px for WCAG/Mobile) */
+.widget-timer-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.widget-timer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.625rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.widget-timer-btn:active {
+  transform: scale(0.98);
+}
+
+.widget-timer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.widget-timer-btn-primary.start {
+  background-color: var(--accent-color);
+  color: #ffffff;
+  border: 1px solid transparent;
+}
+
+.widget-timer-btn-primary.start:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.widget-timer-btn-primary.pause {
+  background-color: var(--danger-color);
+  color: #ffffff;
+  border: 1px solid transparent;
+}
+
+.widget-timer-btn-primary.pause:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.widget-timer-btn-secondary {
+  background-color: var(--bg-widget);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+.widget-timer-btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-card-hover);
+}
+
+/* ==========================================================================
    KPI Cards Grid
    ========================================================================== */
 
@@ -708,6 +961,21 @@
 
   .widget-chart-svg {
     height: 12rem; /* 192px */
+  }
+
+  .widget-timer-card {
+    padding: 1.25rem;
+  }
+
+  .widget-timer-digits {
+    font-size: 2.75rem;
+  }
+
+  .widget-timer-controls {
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
   }
 }
 

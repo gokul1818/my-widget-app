@@ -8,6 +8,7 @@ export function App() {
   const [stateMode, setStateMode] = useState('normal'); // 'normal' | 'loading' | 'error' | 'empty'
   const [theme, setTheme] = useState('light'); // 'light' | 'dark'
   const [viewportMode, setViewportMode] = useState('fluid'); // 'fluid' | 'mobile' | 'tablet'
+  const [showTimer, setShowTimer] = useState(true);
 
   const handleRefresh = () => {
     setStateMode('loading');
@@ -143,6 +144,19 @@ export function App() {
               💻 Responsive (100%)
             </button>
           </div>
+
+          {/* Simple Timer Toggle */}
+          <div className="toolbar-group">
+            <span className="toolbar-label">Timer</span>
+            <button
+              type="button"
+              className={`toolbar-btn ${showTimer ? 'active' : ''}`}
+              onClick={() => setShowTimer((prev) => !prev)}
+              title="Toggle simple timer in widget"
+            >
+              ⏱️ {showTimer ? 'Timer Active' : 'Timer Off'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -168,6 +182,7 @@ export function App() {
                 : null
             }
             theme={theme}
+            showTimer={showTimer}
             onRefresh={handleRefresh}
             onTimeframeChange={handleTimeframeChange}
             activeTimeframe={data.timeframe}

@@ -61,3 +61,12 @@ export const mockDashboardData = {
 
 export const timeframes = ['Today', '7D', '30D', '90D'];
 
+export const timerPresets = [
+  { label: 'Stopwatch', seconds: 0, mode: 'countup' },
+  { label: '1m', seconds: 60, mode: 'countdown' },
+  { label: '5m', seconds: 300, mode: 'countdown' },
+  { label: '10m', seconds: 600, mode: 'countdown' },
+  { label: '15m', seconds: 900, mode: 'countdown' },
+];
+
+

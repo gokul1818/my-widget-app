@@ -25,3 +25,23 @@ export function formatPercent(value) {
   const prefix = value > 0 ? '+' : '';
   return `${prefix}${value.toFixed(1)}%`;
 }
+
+export function formatTimer(totalSeconds) {
+  if (typeof totalSeconds !== 'number' || isNaN(totalSeconds) || totalSeconds < 0) {
+    return '00:00';
+  }
+  const rounded = Math.floor(totalSeconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const seconds = rounded % 60;
+
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+
+  if (hours > 0) {
+    const hh = String(hours).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+  return `${mm}:${ss}`;
+}
+
