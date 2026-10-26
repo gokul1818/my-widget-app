@@ -1,0 +1,232 @@
+/* ==========================================================================
+   Showcase App Layout & Interactive Controls
+   ========================================================================== */
+
+.app-wrapper {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  transition: background-color 0.25s ease;
+}
+
+.app-wrapper.dark-mode {
+  background-color: #0b0f19;
+  color: #f8fafc;
+}
+
+/* App Header */
+.app-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dark-mode .app-header {
+  background-color: #111827;
+  border-bottom-color: #1f2937;
+}
+
+.app-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-logo-badge {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.875rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.app-heading {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.app-subheading {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.dark-mode .app-subheading {
+  color: #94a3b8;
+}
+
+/* Toolbar Controls */
+.app-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  background-color: #f8fafc;
+  padding: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+}
+
+.dark-mode .toolbar-group {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.toolbar-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 0 0.5rem;
+}
+
+.dark-mode .toolbar-label {
+  color: #94a3b8;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem; /* 44px touch target */
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.dark-mode .toolbar-btn {
+  color: #cbd5e1;
+}
+
+.toolbar-btn:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.dark-mode .toolbar-btn:hover {
+  background-color: #374151;
+  color: #ffffff;
+}
+
+.toolbar-btn.active {
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Main Display Area */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
+}
+
+/* Device frame simulator */
+.device-viewport-frame {
+  width: 100%;
+  transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.device-viewport-frame.view-mobile {
+  max-width: 23.4375rem; /* 375px (iPhone standard width) */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border-radius: 1.5rem;
+  border: 8px solid #0f172a;
+}
+
+.device-viewport-frame.view-tablet {
+  max-width: 48rem; /* 768px (iPad Mini / iPad standard width) */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border-radius: 1.25rem;
+  border: 6px solid #1e293b;
+}
+
+.device-viewport-frame.view-fluid {
+  max-width: 100%;
+}
+
+.device-frame-banner {
+  background-color: #0f172a;
+  color: #94a3b8;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.25rem 0.5rem;
+  width: 100%;
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.device-camera-notch {
+  width: 3rem;
+  height: 0.5rem;
+  background-color: #1e293b;
+  border-radius: 9999px;
+}
+
+/* App Footer */
+.app-footer-bar {
+  text-align: center;
+  padding: 1.25rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+  border-top: 1px solid #e2e8f0;
+}
+
+.dark-mode .app-footer-bar {
+  border-top-color: #1f2937;
+  color: #94a3b8;
+}
+
+/* Responsive adjustments for toolbar */
+@media (min-width: 768px) {
+  .app-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+  }
+
+  .app-main {
+    padding: 2.5rem 1.5rem;
+  }
+}
