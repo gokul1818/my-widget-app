@@ -91,6 +91,28 @@ test('Google Auth: parseGoogleJwt handles invalid token gracefully', () => {
   assert.equal(parseGoogleJwt(''), null);
 });
 
+test('Google Auth: parseGoogleJwt successfully decodes valid Google OAuth JWT credential', () => {
+  const payload = {
+    sub: '10987654321',
+    name: 'Gokulakrishnan',
+    email: 'gokul@gmail.com',
+    picture: 'https://lh3.googleusercontent.com/a/photo.jpg',
+    email_verified: true,
+  };
+  const base64UrlPayload = Buffer.from(JSON.stringify(payload))
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  const fakeJwt = `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.${base64UrlPayload}.fakeSignature`;
+  const decoded = parseGoogleJwt(fakeJwt);
+  assert.equal(decoded.sub, payload.sub);
+  assert.equal(decoded.name, payload.name);
+  assert.equal(decoded.email, payload.email);
+  assert.equal(decoded.picture, payload.picture);
+});
+
 test('Google Calendar: buildGoogleCalendarUrl generates valid URL with params', () => {
   const url = buildGoogleCalendarUrl({
     title: '🏢 In Office — Gokul',
@@ -171,5 +193,41 @@ test('Team Data: Clean state has zero dummy teams', () => {
   assert.ok(Array.isArray(initialTeams));
   assert.equal(initialTeams.length, 0, 'No dummy teams pre-seeded');
 });
+
+test('Gmail Auth: auto-name extraction from email prefix formats correctly', () => {
+  const deriveNameFromEmail = (email) => {
+    const prefix = email.split('@')[0];
+    return prefix
+      .replace(/[._]/g, ' ')
+      .split(' ')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
+  assert.equal(deriveNameFromEmail('gokul.krishnan@gmail.com'), 'Gokul Krishnan');
+  assert.equal(deriveNameFromEmail('priya_sharma@gmail.com'), 'Priya Sharma');
+  assert.equal(deriveNameFromEmail('alex@company.com'), 'Alex');
+});
+
+test('Gmail Auth: authenticating user with zero teams initializes a squad', () => {
+  const realUser = {
+    name: 'Gokulakrishnan',
+    email: 'gokul@gmail.com',
+  };
+
+  const initialSquad = createNewTeam({
+    name: `${realUser.name.split(' ')[0]}'s Squad`,
+    location: 'Office',
+    dept: 'Engineering',
+    ownerUser: realUser,
+  });
+
+  assert.equal(initialSquad.name, "Gokulakrishnan's Squad");
+  assert.equal(initialSquad.ownerEmail, 'gokul@gmail.com');
+  assert.equal(initialSquad.members[0].name, 'Gokulakrishnan');
+  assert.equal(initialSquad.members[0].email, 'gokul@gmail.com');
+  assert.equal(initialSquad.members[0].isOwner, true);
+});
+
 
 

@@ -12,6 +12,7 @@ import {
   JoinTeamModal,
   TeamHeaderDropdown,
   TeamNotificationBanner,
+  LoginScreen,
 } from './components';
 import {
   getTomorrowDetails,
@@ -42,6 +43,7 @@ export function App() {
   const [theme, setTheme] = useState('dark');
   const [toastMessage, setToastMessage] = useState(null);
   const [googleUser, setGoogleUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -56,30 +58,32 @@ export function App() {
   // 1. Initial Load from storage
   useEffect(() => {
     async function init() {
-      const savedTeams = await loadTeams();
-      if (savedTeams && Array.isArray(savedTeams) && savedTeams.length > 0) {
-        setTeams(savedTeams);
-      }
-
-      const savedActiveTeamId = await loadActiveTeamId();
-      if (savedActiveTeamId) {
-        setActiveTeamId(savedActiveTeamId);
-      }
-
-      const savedGoogleUser = await loadGoogleUser();
-      if (savedGoogleUser) {
-        setGoogleUser(savedGoogleUser);
-      }
-
-      // Check URL parameters for ?join=CODE
       try {
+        const savedGoogleUser = await loadGoogleUser();
+        if (savedGoogleUser) {
+          setGoogleUser(savedGoogleUser);
+        }
+
+        const savedTeams = await loadTeams();
+        if (savedTeams && Array.isArray(savedTeams) && savedTeams.length > 0) {
+          setTeams(savedTeams);
+        }
+
+        const savedActiveTeamId = await loadActiveTeamId();
+        if (savedActiveTeamId) {
+          setActiveTeamId(savedActiveTeamId);
+        }
+
+        // Check URL parameters for ?join=CODE
         const params = new URLSearchParams(window.location.search);
         const joinCode = params.get('join');
         if (joinCode) {
           setIsJoinModalOpen(true);
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('Initialization error:', err);
+      } finally {
+        setAuthLoading(false);
       }
     }
     init();
@@ -116,6 +120,22 @@ export function App() {
     setGoogleUser(profile);
     await saveGoogleUser(profile);
 
+    // If no teams exist yet, initialize a squad for this user
+    if (!teams || teams.length === 0) {
+      const defaultTeam = createNewTeam({
+        name: `${profile.name.split(' ')[0]}'s Squad`,
+        location: 'Office',
+        dept: 'Engineering',
+        ownerUser: profile,
+      });
+      setTeams([defaultTeam]);
+      setActiveTeamId(defaultTeam.id);
+      saveTeams([defaultTeam]);
+      saveActiveTeamId(defaultTeam.id);
+      showToast(`🎉 Signed in with Gmail! Created "${defaultTeam.name}"`);
+      return;
+    }
+
     // Sync user into active team members
     const linkedMember = createOrUpdateMemberFromGoogle(profile, members);
     if (linkedMember && activeTeam) {
@@ -141,7 +161,7 @@ export function App() {
       );
     }
 
-    showToast(`Connected with Gmail: ${profile.email}`);
+    showToast(`Signed in with Gmail: ${profile.email}`);
   };
 
   // Google Sign Out Handler
@@ -423,6 +443,32 @@ export function App() {
         m.name === (googleUser ? googleUser.name : 'Gokulakrishnan')
     ) || members[0] || (googleUser ? { name: googleUser.name, status: 'office' } : null);
 
+  // 1. Loading splash screen while checking persistent auth
+  if (authLoading) {
+    return (
+      <div className={`app-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
+        <div className="auth-loading-screen">
+          <div className="auth-loading-spinner" />
+          <p className="auth-loading-text">Loading Office Roster...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Authentication Gate: Must login with Gmail first to access everything
+  if (!googleUser) {
+    return (
+      <div className={`app-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
+        {toastMessage && (
+          <div className="toast-notification" role="status" aria-live="polite">
+            {toastMessage}
+          </div>
+        )}
+        <LoginScreen onGoogleSignIn={handleGoogleSignIn} />
+      </div>
+    );
+  }
+
   return (
     <div className={`app-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
       {/* Toast Notification */}
@@ -456,25 +502,37 @@ export function App() {
           />
 
           <div className="header-actions">
-            {/* Google / Gmail Connect Button */}
-            <button
-              type="button"
-              className={`btn-header-google ${googleUser ? 'connected' : ''}`}
-              onClick={() => setIsGoogleModalOpen(true)}
-              title={googleUser ? `Signed in as ${googleUser.email}` : 'Connect with Gmail'}
-              aria-label="Google account status"
-            >
-              <svg className="google-header-svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
-                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
-                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
-                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
-              </svg>
-              <span className="google-header-text">
-                {googleUser ? googleUser.name.split(' ')[0] : 'Gmail'}
-              </span>
-              {googleUser && <span className="google-online-dot" aria-hidden="true" />}
-            </button>
+            {/* Real Gmail Account Profile Badge & Sign Out Button */}
+            <div className="header-account-pill">
+              <button
+                type="button"
+                className="btn-header-profile"
+                onClick={() => setIsGoogleModalOpen(true)}
+                title={`Signed in as ${googleUser.name} (${googleUser.email}). Click to view details.`}
+                aria-label="Google account settings"
+              >
+                {googleUser.picture ? (
+                  <img src={googleUser.picture} alt={googleUser.name} className="header-user-img" />
+                ) : (
+                  <span className="header-user-avatar-initials">
+                    {googleUser.initials || googleUser.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <div className="header-user-meta">
+                  <span className="header-user-name">{googleUser.name}</span>
+                  <span className="header-user-email">{googleUser.email}</span>
+                </div>
+              </button>
+              <button
+                type="button"
+                className="btn-header-signout"
+                onClick={handleGoogleSignOut}
+                title="Sign Out of Gmail"
+                aria-label="Sign Out of Gmail"
+              >
+                Sign Out
+              </button>
+            </div>
 
             {/* Invite Colleagues Button */}
             <button

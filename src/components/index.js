@@ -10,3 +10,4 @@ export { InviteColleaguesModal } from './InviteColleaguesModal';
 export { JoinTeamModal } from './JoinTeamModal';
 export { TeamHeaderDropdown } from './TeamHeaderDropdown';
 export { TeamNotificationBanner } from './TeamNotificationBanner';
+export { LoginScreen } from './LoginScreen';
