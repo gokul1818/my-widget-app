@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { findTeamByCode, loadTeams } from '../utils/teamData';
 
 export function JoinTeamModal({
   isOpen,
@@ -7,27 +8,54 @@ export function JoinTeamModal({
   currentUser,
   onJoinTeamByCode,
   onRequestJoinTeam,
+  initialCode = '',
 }) {
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode);
   const [error, setError] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (initialCode) {
+      setCode(initialCode);
+    }
+  }, [initialCode]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const cleanCode = code.trim().toUpperCase();
+    const cleanCode = code.trim();
     if (!cleanCode) {
       setError('Please enter a team code');
       return;
     }
 
-    const matched = allTeams.find((t) => t.code.toUpperCase() === cleanCode);
+    setIsSearching(true);
+    setError('');
+
+    // 1. Search in current memory teams
+    let matched = findTeamByCode(allTeams, cleanCode);
+
+    // 2. If not found, fetch fresh teams from database / server
     if (!matched) {
-      setError(`Team with code "${cleanCode}" not found. Please verify the code.`);
+      try {
+        const freshTeams = await loadTeams();
+        if (freshTeams && Array.isArray(freshTeams)) {
+          matched = findTeamByCode(freshTeams, cleanCode);
+        }
+      } catch (err) {
+        console.warn('Error loading fresh teams:', err);
+      }
+    }
+
+    setIsSearching(false);
+
+    if (!matched) {
+      setError(`No team found matching code "${cleanCode}". Please verify the code with your colleague.`);
       return;
     }
 
-    onJoinTeamByCode(matched.id, currentUser);
+    onJoinTeamByCode(matched.id, currentUser, matched);
     setCode('');
     setError('');
     onClose();
@@ -49,13 +77,13 @@ export function JoinTeamModal({
           </button>
         </div>
 
-        {error && <div className="form-error-banner">{error}</div>}
+        {error && <div className="form-error-banner" role="alert">{error}</div>}
 
         {/* Enter Code Form */}
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
             <label htmlFor="team-code-input" className="form-label">
-              Team Code
+              Team Code <span className="required">*</span>
             </label>
             <input
               id="team-code-input"
@@ -69,11 +97,13 @@ export function JoinTeamModal({
               }}
               autoFocus
             />
-            <span className="form-hint">Ask your team lead or colleague for the 6-character code</span>
+            <span className="form-hint">
+              Enter the code shared by your colleague (e.g. <code>TEAM-1234</code> or <code>1234</code>)
+            </span>
           </div>
 
-          <button type="submit" className="btn-primary btn-full">
-            Join Team
+          <button type="submit" className="btn-primary btn-full" disabled={isSearching}>
+            {isSearching ? 'Finding Team...' : 'Join Team with Code'}
           </button>
         </form>
 
@@ -87,18 +117,18 @@ export function JoinTeamModal({
                   <div className="discovered-team-info">
                     <span className="discovered-team-name">{team.name}</span>
                     <span className="discovered-team-meta">
-                      📍 {team.location} • 👥 {team.members?.length || 0} members
+                      Code: <strong style={{ color: '#60a5fa' }}>{team.code}</strong> • 👥 {team.members?.length || 0} members
                     </span>
                   </div>
                   <button
                     type="button"
-                    className="btn-secondary btn-sm"
+                    className="btn-primary btn-sm"
                     onClick={() => {
-                      onRequestJoinTeam(team.id, currentUser);
+                      onJoinTeamByCode(team.id, currentUser, team);
                       onClose();
                     }}
                   >
-                    Request to Join
+                    Join Directly
                   </button>
                 </div>
               ))}

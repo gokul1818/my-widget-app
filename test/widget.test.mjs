@@ -19,6 +19,8 @@ import {
   generateTeamCode,
   createNewTeam,
   initialTeams,
+  normalizeTeamCode,
+  findTeamByCode,
 } from '../src/utils/teamData.js';
 
 test('Office Roster: Clean state has zero dummy members', () => {
@@ -228,6 +230,35 @@ test('Gmail Auth: authenticating user with zero teams initializes a squad', () =
   assert.equal(initialSquad.members[0].email, 'gokul@gmail.com');
   assert.equal(initialSquad.members[0].isOwner, true);
 });
+
+test('Team Data: normalizeTeamCode strips symbols, spaces, and uppercases', () => {
+  assert.equal(normalizeTeamCode('team-1234'), 'TEAM1234');
+  assert.equal(normalizeTeamCode('eng 4821'), 'ENG4821');
+  assert.equal(normalizeTeamCode('  #dev-9999  '), 'DEV9999');
+});
+
+test('Team Data: findTeamByCode matches with hyphen, without hyphen, spaces, and case-insensitively', () => {
+  const sampleTeams = [
+    { id: 't_1', code: 'ENG-4821', name: 'Engineering' },
+    { id: 't_2', code: 'PROD-9000', name: 'Product Core' },
+  ];
+
+  // Exact
+  assert.equal(findTeamByCode(sampleTeams, 'ENG-4821')?.id, 't_1');
+  // Lowercase with hyphen
+  assert.equal(findTeamByCode(sampleTeams, 'eng-4821')?.id, 't_1');
+  // No hyphen
+  assert.equal(findTeamByCode(sampleTeams, 'ENG4821')?.id, 't_1');
+  // Spaced
+  assert.equal(findTeamByCode(sampleTeams, 'eng 4821')?.id, 't_1');
+  // By ID
+  assert.equal(findTeamByCode(sampleTeams, 't_2')?.id, 't_2');
+  // By Name
+  assert.equal(findTeamByCode(sampleTeams, 'product core')?.id, 't_2');
+  // Non-existent
+  assert.equal(findTeamByCode(sampleTeams, 'NONEXISTENT'), null);
+});
+
 
 
 

@@ -12,6 +12,41 @@ export function generateTeamCode(prefix = 'TEAM') {
   return `${cleanPrefix}-${randomNum}`;
 }
 
+/**
+ * Cleanly normalizes a team code by removing spaces, hyphens, and uppercase.
+ * Example: 'team-1234' -> 'TEAM1234', 'ENG 4821' -> 'ENG4821'
+ */
+export function normalizeTeamCode(code) {
+  return (code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
+/**
+ * Robust search to find a team by code, id, or name with lenient matching
+ */
+export function findTeamByCode(teams, searchCode) {
+  if (!Array.isArray(teams) || !searchCode) return null;
+  const cleanInput = searchCode.trim();
+  const normalizedInput = normalizeTeamCode(cleanInput);
+
+  // 1. Normalized code match (ignores hyphens, spaces, and case)
+  let found = teams.find((t) => normalizeTeamCode(t.code) === normalizedInput);
+  if (found) return found;
+
+  // 2. Exact code match
+  found = teams.find((t) => (t.code || '').toUpperCase() === cleanInput.toUpperCase());
+  if (found) return found;
+
+  // 3. Team ID match
+  found = teams.find((t) => t.id === cleanInput);
+  if (found) return found;
+
+  // 4. Team Name match
+  found = teams.find((t) => (t.name || '').toLowerCase() === cleanInput.toLowerCase());
+  if (found) return found;
+
+  return null;
+}
+
 // Clean initial teams: NO DUMMY DATA
 export const initialTeams = [];
 

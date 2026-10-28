@@ -52,6 +52,7 @@ export function App() {
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [initialJoinCode, setInitialJoinCode] = useState('');
 
   const tomorrow = useMemo(() => getTomorrowDetails(), []);
 
@@ -78,6 +79,7 @@ export function App() {
         const params = new URLSearchParams(window.location.search);
         const joinCode = params.get('join');
         if (joinCode) {
+          setInitialJoinCode(joinCode);
           setIsJoinModalOpen(true);
         }
       } catch (err) {
@@ -204,12 +206,22 @@ export function App() {
   };
 
   // Team: Join Team by Code
-  const handleJoinTeamByCode = (teamId, user) => {
-    const targetTeam = teams.find((t) => t.id === teamId);
-    if (!targetTeam) return;
+  const handleJoinTeamByCode = (teamId, user, freshTeamObj) => {
+    let targetTeam = teams.find((t) => t.id === teamId);
+    let workingTeams = teams;
+
+    if (!targetTeam && freshTeamObj) {
+      targetTeam = freshTeamObj;
+      workingTeams = [freshTeamObj, ...teams.filter((t) => t.id !== freshTeamObj.id)];
+    }
+
+    if (!targetTeam) {
+      showToast('⚠️ Could not find team to join.');
+      return;
+    }
 
     const newMember = {
-      id: `m_${Date.now()}`,
+      id: user?.sub ? `m_${user.sub}` : `m_${Date.now()}`,
       name: user?.name || 'Colleague',
       email: user?.email || '',
       role: 'Team Member',
@@ -217,21 +229,35 @@ export function App() {
       status: 'office',
       avatarBg: '#3b82f6',
       desk: 'Office',
+      picture: user?.picture || null,
     };
 
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const exists = t.members.some(
-          (m) => (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) || m.name === newMember.name
-        );
-        if (exists) return t;
-        return { ...t, members: [newMember, ...t.members] };
-      })
-    );
+    const updatedTeams = workingTeams.map((t) => {
+      if (t.id !== targetTeam.id) return t;
+      const exists = (t.members || []).some(
+        (m) =>
+          (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
+          m.name.toLowerCase() === newMember.name.toLowerCase()
+      );
+      if (exists) {
+        return {
+          ...t,
+          members: (t.members || []).map((m) =>
+            (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
+            m.name.toLowerCase() === newMember.name.toLowerCase()
+              ? { ...m, ...newMember, role: m.role || newMember.role }
+              : m
+          ),
+        };
+      }
+      return { ...t, members: [newMember, ...(t.members || [])] };
+    });
 
-    setActiveTeamId(teamId);
-    showToast(`Joined ${targetTeam.name}!`);
+    setTeams(updatedTeams);
+    setActiveTeamId(targetTeam.id);
+    saveTeams(updatedTeams);
+    saveActiveTeamId(targetTeam.id);
+    showToast(`🎉 Joined team "${targetTeam.name}"!`);
   };
 
   // Team: Request to Join Team (Vice-Versa)
@@ -502,7 +528,29 @@ export function App() {
           />
 
           <div className="header-actions">
-            {/* Real Gmail Account Profile Badge & Sign Out Button */}
+            {/* Create Team Button */}
+            <button
+              type="button"
+              className="btn-header-team-action btn-create-team-header"
+              onClick={() => setIsCreateTeamOpen(true)}
+              title="Create a new office team"
+              aria-label="Create Team"
+            >
+              ➕ Create Team
+            </button>
+
+            {/* Join Team Button */}
+            <button
+              type="button"
+              className="btn-header-team-action btn-join-team-header"
+              onClick={() => setIsJoinModalOpen(true)}
+              title="Join an existing team with code"
+              aria-label="Join Team"
+            >
+              🤝 Join Team
+            </button>
+
+            {/* Google Account Profile & Sign Out Button */}
             <div className="header-account-pill">
               <button
                 type="button"
@@ -533,60 +581,6 @@ export function App() {
                 Sign Out
               </button>
             </div>
-
-            {/* Invite Colleagues Button */}
-            <button
-              type="button"
-              className="btn-header-action btn-invite"
-              onClick={() => setIsInviteModalOpen(true)}
-              title="Invite colleagues via Gmail or code"
-              aria-label="Invite colleagues"
-            >
-              ✉️ Invite
-            </button>
-
-            {/* Google Calendar Button */}
-            <button
-              type="button"
-              className="btn-header-action btn-calendar"
-              onClick={() => setIsCalendarModalOpen(true)}
-              title="Add schedule to Google Calendar"
-              aria-label="Google Calendar"
-            >
-              📅 Calendar
-            </button>
-
-            {/* Theme Toggle */}
-            <button
-              type="button"
-              className="btn-header-action"
-              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-              aria-label="Toggle theme"
-            >
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
-
-            {/* Share Roster */}
-            <button
-              type="button"
-              className="btn-header-action btn-share"
-              onClick={handleCopySummary}
-              title="Copy Slack/WhatsApp update"
-              aria-label="Share roster summary"
-            >
-              📤 Share
-            </button>
-
-            {/* Add Member Button */}
-            <button
-              type="button"
-              className="btn-header-primary"
-              onClick={() => setIsAddModalOpen(true)}
-              aria-label="Add new team member"
-            >
-              ➕ Add Member
-            </button>
           </div>
         </div>
       </header>
@@ -853,11 +847,15 @@ export function App() {
       {/* Join Team Modal */}
       <JoinTeamModal
         isOpen={isJoinModalOpen}
-        onClose={() => setIsJoinModalOpen(false)}
+        onClose={() => {
+          setIsJoinModalOpen(false);
+          setInitialJoinCode('');
+        }}
         allTeams={teams}
         currentUser={googleUser}
         onJoinTeamByCode={handleJoinTeamByCode}
         onRequestJoinTeam={handleRequestJoinTeam}
+        initialCode={initialJoinCode}
       />
     </div>
   );

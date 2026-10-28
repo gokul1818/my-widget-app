@@ -13,7 +13,7 @@ export function GoogleLoginModal({
   onSignOut,
 }) {
   const [clientId, setClientId] = useState(() => {
-    return localStorage.getItem('google_client_id') || import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+    return import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('google_client_id') || '';
   });
   const [showConfig, setShowConfig] = useState(false);
   const [error, setError] = useState('');

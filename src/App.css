@@ -189,6 +189,47 @@ body {
   transform: scale(0.97);
 }
 
+.btn-header-team-action {
+  min-height: 34px;
+  padding: 0 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-create-team-header {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+.btn-create-team-header:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35);
+}
+
+.btn-join-team-header {
+  background-color: var(--bg-card-subtle);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-join-team-header:hover {
+  background-color: var(--bg-hover);
+  border-color: #60a5fa;
+  color: #60a5fa;
+  transform: translateY(-1px);
+}
+
+
 /* Main Content */
 .app-main {
   max-width: 900px;
