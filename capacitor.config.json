@@ -1,6 +1,6 @@
 {
   "appId": "com.mywidget.app",
-  "appName": "Analytics & Timer Widget",
+  "appName": "Office Team Roster",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

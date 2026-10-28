@@ -38,11 +38,10 @@
         <receiver
             android:name=".TimerWidgetProvider"
             android:exported="true"
-            android:label="Analytics &amp; Timer Widget">
+            android:label="Office Team Roster">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.mywidget.app.ACTION_TOGGLE_TIMER" />
-                <action android:name="com.mywidget.app.ACTION_RESET_TIMER" />
+                <action android:name="com.mywidget.app.ACTION_REFRESH_ROSTER" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

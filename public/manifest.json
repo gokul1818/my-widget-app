@@ -1,12 +1,12 @@
 {
-  "name": "Analytics & Timer Widget",
-  "short_name": "Widget",
-  "description": "Mobile-first analytics and session timer widget",
+  "name": "Office Team Roster",
+  "short_name": "Office Roster",
+  "description": "Track who is coming to the office tomorrow",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "theme_color": "#10b981",
   "icons": [
     {
       "src": "/favicon.svg",

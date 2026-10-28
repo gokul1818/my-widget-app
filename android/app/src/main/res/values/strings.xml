@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Analytics &amp; Timer Widget</string>
-    <string name="title_activity_main">Analytics &amp; Timer Widget</string>
+    <string name="app_name">Office Team Roster</string>
+    <string name="title_activity_main">Office Team Roster</string>
     <string name="package_name">com.mywidget.app</string>
     <string name="custom_url_scheme">com.mywidget.app</string>
 </resources>

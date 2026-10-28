@@ -1,54 +1,175 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatCurrency, formatNumber, formatPercent, formatTimer } from '../src/utils/formatters.js';
-import { mockDashboardData, timeframes, timerPresets } from '../src/utils/mockData.js';
+import {
+  initialTeamMembers,
+  DEPARTMENTS,
+  getTomorrowDetails,
+  formatRosterSummary,
+} from '../src/utils/officeData.js';
+import {
+  parseGoogleJwt,
+  createOrUpdateMemberFromGoogle,
+} from '../src/utils/googleAuth.js';
+import {
+  buildGoogleCalendarUrl,
+  getCalendarEventForMember,
+  generateIcsContent,
+} from '../src/utils/googleCalendar.js';
+import {
+  generateTeamCode,
+  createNewTeam,
+  initialTeams,
+} from '../src/utils/teamData.js';
 
-test('Formatters: formatCurrency handles integers and decimals', () => {
-  assert.equal(formatCurrency(28450), '$28,450');
-  assert.equal(formatCurrency(22.95), '$22.95');
-  assert.equal(formatCurrency(0), '$0');
+test('Office Roster: Clean state has zero dummy members', () => {
+  assert.ok(Array.isArray(initialTeamMembers));
+  assert.equal(initialTeamMembers.length, 0, 'No dummy members pre-seeded');
 });
 
-test('Formatters: formatNumber handles standard and compact formatting', () => {
-  assert.equal(formatNumber(1240), '1,240');
-  assert.equal(formatNumber(25000), '25K');
-  assert.equal(formatNumber(0), '0');
+test('Office Roster: Departments list contains standard categories', () => {
+  assert.ok(DEPARTMENTS.includes('Engineering'));
+  assert.ok(DEPARTMENTS.includes('Design'));
+  assert.ok(DEPARTMENTS.includes('Product'));
+  assert.ok(DEPARTMENTS.includes('Mobile'));
+  assert.ok(DEPARTMENTS.includes('QA'));
 });
 
-test('Formatters: formatPercent handles positive and negative percentages', () => {
-  assert.equal(formatPercent(14.8), '+14.8%');
-  assert.equal(formatPercent(-0.4), '-0.4%');
-  assert.equal(formatPercent(0), '0%');
+test('Office Roster: getTomorrowDetails returns valid day and date strings', () => {
+  const tomorrow = getTomorrowDetails();
+  assert.ok(tomorrow.fullDateStr);
+  assert.ok(tomorrow.shortDateStr);
+  assert.ok(tomorrow.dayName);
+  assert.ok(tomorrow.monthName);
+  assert.ok(tomorrow.dayNum > 0 && tomorrow.dayNum <= 31);
 });
 
-test('Formatters: formatTimer handles seconds, minutes, hours, and edge cases', () => {
-  assert.equal(formatTimer(0), '00:00');
-  assert.equal(formatTimer(45), '00:45');
-  assert.equal(formatTimer(60), '01:00');
-  assert.equal(formatTimer(75), '01:15');
-  assert.equal(formatTimer(3599), '59:59');
-  assert.equal(formatTimer(3600), '01:00:00');
-  assert.equal(formatTimer(3665), '01:01:05');
-  assert.equal(formatTimer(-10), '00:00');
-  assert.equal(formatTimer(null), '00:00');
-  assert.equal(formatTimer(undefined), '00:00');
-  assert.equal(formatTimer(NaN), '00:00');
+test('Office Roster: formatRosterSummary correctly formats Slack/WhatsApp summary', () => {
+  const sample = [
+    { id: '1', name: 'Gokul', role: 'Dev', dept: 'Engineering', status: 'office' },
+    { id: '2', name: 'Priya', role: 'UI', dept: 'Design', status: 'wfh' },
+    { id: '3', name: 'Rahul', role: 'QA', dept: 'QA', status: 'leave' },
+  ];
+
+  const summary = formatRosterSummary(sample, 'Thursday, Oct 29');
+  assert.ok(summary.includes('Office Attendance for Tomorrow'));
+  assert.ok(summary.includes('Coming to Office (1)'));
+  assert.ok(summary.includes('Gokul'));
+  assert.ok(summary.includes('Working from Home (1)'));
+  assert.ok(summary.includes('Priya'));
+  assert.ok(summary.includes('On Leave (1)'));
+  assert.ok(summary.includes('Rahul'));
+  assert.ok(summary.includes('Total Team: 3 members'));
 });
 
-test('Timer Presets: Contains standard stopwatch and countdown presets', () => {
-  assert.ok(Array.isArray(timerPresets));
-  assert.equal(timerPresets[0].label, 'Stopwatch');
-  assert.equal(timerPresets[0].mode, 'countup');
-  assert.equal(timerPresets[1].label, '1m');
-  assert.equal(timerPresets[1].seconds, 60);
-  assert.equal(timerPresets[1].mode, 'countdown');
+test('Google Auth: createOrUpdateMemberFromGoogle links existing or adds new member', () => {
+  const existing = [
+    { id: '1', name: 'Gokulakrishnan', role: 'Dev', dept: 'Engineering', status: 'office', email: 'gokul@gmail.com' },
+  ];
+
+  // 1. Linking existing
+  const updated = createOrUpdateMemberFromGoogle(
+    { name: 'Gokulakrishnan', email: 'gokul@gmail.com', picture: 'https://example.com/pic.jpg', sub: '12345' },
+    existing
+  );
+  assert.equal(updated.id, '1');
+  assert.equal(updated.picture, 'https://example.com/pic.jpg');
+  assert.equal(updated.googleId, '12345');
+
+  // 2. Creating new member
+  const newMember = createOrUpdateMemberFromGoogle(
+    { name: 'Vikram Patel', email: 'vikram@gmail.com', picture: null, sub: '67890' },
+    existing
+  );
+  assert.ok(newMember);
+  assert.equal(newMember.name, 'Vikram Patel');
+  assert.equal(newMember.email, 'vikram@gmail.com');
+  assert.equal(newMember.status, 'office');
 });
 
-test('Mock Data: Dashboard payload contains valid structure', () => {
-  assert.ok(mockDashboardData.kpis.length >= 4);
-  assert.ok(mockDashboardData.trendChart.length > 0);
-  assert.ok(mockDashboardData.breakdown.length > 0);
-  assert.deepEqual(timeframes, ['Today', '7D', '30D', '90D']);
+test('Google Auth: parseGoogleJwt handles invalid token gracefully', () => {
+  assert.equal(parseGoogleJwt('invalid.token'), null);
+  assert.equal(parseGoogleJwt(''), null);
+});
+
+test('Google Calendar: buildGoogleCalendarUrl generates valid URL with params', () => {
+  const url = buildGoogleCalendarUrl({
+    title: '🏢 In Office — Gokul',
+    description: 'Working from office tomorrow',
+    location: 'Main Office',
+    startDate: new Date('2026-10-29T09:00:00Z'),
+    endDate: new Date('2026-10-29T18:00:00Z'),
+    isAllDay: false,
+  });
+
+  assert.ok(url.startsWith('https://calendar.google.com/calendar/render?'));
+  assert.ok(url.includes('action=TEMPLATE'));
+  assert.ok(url.includes('text=%F0%9F%8F%A2+In+Office'));
+  assert.ok(url.includes('location=Main+Office'));
+});
+
+test('Google Calendar: getCalendarEventForMember formats event details correctly', () => {
+  const member = { name: 'Gokul', status: 'office', desk: 'Desk 4B' };
+  const tomorrow = { fullDateStr: 'Thursday, Oct 29', dateObj: new Date('2026-10-29T00:00:00Z') };
+  const allMembers = [
+    member,
+    { name: 'Priya', status: 'office' },
+    { name: 'Rahul', status: 'wfh' },
+  ];
+
+  const event = getCalendarEventForMember(member, tomorrow, allMembers);
+  assert.equal(event.title, '🏢 In Office — Gokul');
+  assert.equal(event.location, 'Office (Desk 4B)');
+  assert.ok(event.description.includes('Priya'));
+  assert.ok(event.startDate);
+  assert.ok(event.endDate);
+});
+
+test('Google Calendar: generateIcsContent produces valid VCALENDAR payload', () => {
+  const ics = generateIcsContent({
+    title: '🏢 In Office',
+    description: 'Work schedule',
+    location: 'Office',
+    startDate: new Date('2026-10-29T09:00:00Z'),
+    endDate: new Date('2026-10-29T18:00:00Z'),
+  });
+
+  assert.ok(ics.includes('BEGIN:VCALENDAR'));
+  assert.ok(ics.includes('SUMMARY:🏢 In Office'));
+  assert.ok(ics.includes('LOCATION:Office'));
+  assert.ok(ics.includes('END:VCALENDAR'));
+});
+
+test('Team Data: generateTeamCode generates formatted code with prefix and 4 digits', () => {
+  const code = generateTeamCode('Frontend');
+  assert.ok(code.startsWith('FRON-'));
+  const parts = code.split('-');
+  assert.equal(parts.length, 2);
+  assert.equal(parts[1].length, 4);
+});
+
+test('Team Data: createNewTeam initializes a full team structure with owner', () => {
+  const team = createNewTeam({
+    name: 'Mobile Core',
+    location: '4th Floor, Pod B',
+    dept: 'Mobile',
+    ownerUser: { name: 'Gokul', email: 'gokul@gmail.com' },
+  });
+
+  assert.equal(team.name, 'Mobile Core');
+  assert.equal(team.location, '4th Floor, Pod B');
+  assert.equal(team.dept, 'Mobile');
+  assert.equal(team.ownerEmail, 'gokul@gmail.com');
+  assert.ok(team.code);
+  assert.equal(team.members.length, 1);
+  assert.equal(team.members[0].name, 'Gokul');
+  assert.equal(team.members[0].isOwner, true);
+  assert.deepEqual(team.invites, []);
+  assert.deepEqual(team.joinRequests, []);
+});
+
+test('Team Data: Clean state has zero dummy teams', () => {
+  assert.ok(Array.isArray(initialTeams));
+  assert.equal(initialTeams.length, 0, 'No dummy teams pre-seeded');
 });
 
 
