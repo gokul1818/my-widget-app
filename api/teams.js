@@ -1,6 +1,33 @@
 import { Redis } from '@upstash/redis';
 
 /**
+ * Dynamically resolves Redis credentials, supporting any Custom Prefix configured in Vercel.
+ * Examples:
+ *   Default: KV_REST_API_URL, KV_REST_API_TOKEN
+ *   Custom:  OFFICE_DB_REST_API_URL, MY_TEAM_REST_API_URL, etc.
+ */
+function getRedisCredentials() {
+  // 1. Check standard Vercel KV and Upstash names
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+  }
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN };
+  }
+
+  // 2. Auto-discover custom prefix from process.env
+  const envKeys = Object.keys(process.env);
+  const urlKey = envKeys.find((k) => k.endsWith('_REST_API_URL') || k.includes('REDIS_REST_URL'));
+  const tokenKey = envKeys.find((k) => k.endsWith('_REST_API_TOKEN') || k.includes('REDIS_REST_TOKEN'));
+
+  if (urlKey && tokenKey && process.env[urlKey] && process.env[tokenKey]) {
+    return { url: process.env[urlKey], token: process.env[tokenKey] };
+  }
+
+  return { url: null, token: null };
+}
+
+/**
  * Serverless Function to interact with Free Vercel KV / Upstash Redis Database
  * Key: "office_teams_v1"
  */
@@ -13,9 +40,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Read standard Vercel KV or Upstash environment variables
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const { url, token } = getRedisCredentials();
 
   if (!url || !token) {
     return res.status(200).json({
