@@ -7,6 +7,8 @@ export function TeamHeaderDropdown({
   onOpenCreateModal,
   onOpenJoinModal,
   onOpenInviteModal,
+  onOpenChoiceModal,
+  onExitTeam,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -28,7 +30,7 @@ export function TeamHeaderDropdown({
         <button
           type="button"
           className="team-selector-btn"
-          onClick={onOpenCreateModal}
+          onClick={onOpenChoiceModal || onOpenCreateModal}
         >
           <span className="team-selector-emoji">➕</span>
           <span className="team-selector-name">Create / Join Team</span>
@@ -137,6 +139,22 @@ export function TeamHeaderDropdown({
               <span className="action-icon">➕</span>
               <span>Create New Team</span>
             </button>
+
+            {activeTeam && (
+              <button
+                type="button"
+                className="team-action-btn team-action-exit"
+                onClick={() => {
+                  setIsOpen(false);
+                  onExitTeam && onExitTeam();
+                }}
+                role="menuitem"
+                style={{ color: '#f87171' }}
+              >
+                <span className="action-icon">🚪</span>
+                <span>Exit {activeTeam.name}</span>
+              </button>
+            )}
           </div>
         </div>
       )}

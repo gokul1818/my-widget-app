@@ -1,6 +1,13 @@
 import React from 'react';
 
-export function SelfCheckinBanner({ myName, myStatus, onSetMyStatus, tomorrowDateStr, onOpenCalendar }) {
+export function SelfCheckinBanner({
+  myName,
+  myStatus,
+  onSetMyStatus,
+  tomorrowDateStr,
+  onOpenCalendar,
+  onEditProfile,
+}) {
   return (
     <div className="checkin-banner">
       <div className="checkin-header">
@@ -16,6 +23,17 @@ export function SelfCheckinBanner({ myName, myStatus, onSetMyStatus, tomorrowDat
             <span className={`my-status-pill my-status-${myStatus}`}>
               Your status: <strong>{myStatus === 'office' ? '🏢 Office' : myStatus === 'wfh' ? '🏠 WFH' : '🌴 Leave'}</strong>
             </span>
+          )}
+          {onEditProfile && (
+            <button
+              type="button"
+              className="btn-banner-edit-profile"
+              onClick={onEditProfile}
+              title="Edit your position and roles"
+              aria-label="Edit your profile"
+            >
+              ✏️ Edit Profile
+            </button>
           )}
           <button
             type="button"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AddMemberModal,
   MemberCard,
@@ -13,6 +13,8 @@ import {
   TeamHeaderDropdown,
   TeamNotificationBanner,
   LoginScreen,
+  TeamChoiceModal,
+  EditMemberModal,
 } from './components';
 import {
   getTomorrowDetails,
@@ -23,244 +25,306 @@ import {
   loadGoogleUser,
   saveGoogleUser,
   clearGoogleUser,
-  createOrUpdateMemberFromGoogle,
 } from './utils/googleAuth';
 import {
-  initialTeams,
   loadTeams,
   saveTeams,
   loadActiveTeamId,
   saveActiveTeamId,
   createNewTeam,
+  isUserInTeam,
+  getUserTeams,
+  isTeamAuthor,
 } from './utils/teamData';
+import {
+  useAppDispatch,
+  useAppSelector,
+  // Auth actions & selectors
+  setUser,
+  clearUser,
+  setAuthLoading,
+  selectCurrentUser,
+  selectAuthLoading,
+  // Teams actions & selectors
+  setTeams,
+  setActiveTeamId,
+  addTeam,
+  joinTeamByCode,
+  addMemberToTeam,
+  updateMemberStatus,
+  deleteMemberFromTeam,
+  setSelfStatus,
+  markAllOffice,
+  sendInvite,
+  requestJoin,
+  approveJoinRequest,
+  rejectJoinRequest,
+  acceptInvite,
+  syncUserWithTeams,
+  leaveTeam,
+  resetTeams,
+  updateMemberProfile,
+  selectAllTeams,
+  selectActiveTeam,
+  selectActiveTeamMembers,
+  // UI actions & selectors
+  setActiveFilter,
+  setSearchQuery,
+  showToast,
+  hideToast,
+  setModalOpen,
+  setInitialJoinCode,
+  selectActiveFilter,
+  selectSearchQuery,
+  selectTheme,
+  selectToastMessage,
+  selectModals,
+  selectInitialJoinCode,
+} from './store';
 import './App.css';
 
 export function App() {
-  const [teams, setTeams] = useState(initialTeams);
-  const [activeTeamId, setActiveTeamId] = useState('team_eng');
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'office' | 'wfh' | 'leave'
-  const [searchQuery, setSearchQuery] = useState('');
-  const [theme, setTheme] = useState('dark');
-  const [toastMessage, setToastMessage] = useState(null);
-  const [googleUser, setGoogleUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const dispatch = useAppDispatch();
 
-  // Modals state
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
-  const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
-  const [initialJoinCode, setInitialJoinCode] = useState('');
+  // Redux state
+  const googleUser = useAppSelector(selectCurrentUser);
+  const authLoading = useAppSelector(selectAuthLoading);
+  const teams = useAppSelector(selectAllTeams);
+  const activeTeamRaw = useAppSelector(selectActiveTeam);
+
+  // Validate active team strictly belongs to currently logged in user
+  const activeTeam = useMemo(() => {
+    if (!activeTeamRaw || !googleUser) return null;
+    return isUserInTeam(activeTeamRaw, googleUser) ? activeTeamRaw : null;
+  }, [activeTeamRaw, googleUser]);
+
+  // Check if current user is the team author/creator
+  const isAuthor = useMemo(() => isTeamAuthor(activeTeam, googleUser), [activeTeam, googleUser]);
+
+  const members = activeTeam?.members || [];
+  const activeFilter = useAppSelector(selectActiveFilter);
+  const searchQuery = useAppSelector(selectSearchQuery);
+  const theme = useAppSelector(selectTheme);
+  const toastMessage = useAppSelector(selectToastMessage);
+  const modals = useAppSelector(selectModals);
+  const initialJoinCode = useAppSelector(selectInitialJoinCode);
+  const [editingMember, setEditingMember] = useState(null);
+  const isInitializedRef = useRef(false);
 
   const tomorrow = useMemo(() => getTomorrowDetails(), []);
 
-  // 1. Initial Load from storage
+  // 1. Initial Remote & Persistent Storage Sync
   useEffect(() => {
-    async function init() {
+    async function initStorageSync() {
       try {
-        const savedGoogleUser = await loadGoogleUser();
-        if (savedGoogleUser) {
-          setGoogleUser(savedGoogleUser);
+        let activeUser = googleUser;
+        if (!activeUser) {
+          activeUser = await loadGoogleUser();
+          if (activeUser) {
+            dispatch(setUser(activeUser));
+          }
         }
 
-        const savedTeams = await loadTeams();
-        if (savedTeams && Array.isArray(savedTeams) && savedTeams.length > 0) {
-          setTeams(savedTeams);
-        }
+        // Always fetch authoritative teams from server / persistent storage
+        let loadedTeams = await loadTeams();
+        if (!Array.isArray(loadedTeams)) loadedTeams = [];
 
-        const savedActiveTeamId = await loadActiveTeamId();
-        if (savedActiveTeamId) {
-          setActiveTeamId(savedActiveTeamId);
+        // Purge any legacy auto-created squad artifacts
+        loadedTeams = loadedTeams.filter(
+          (t) => t.id !== 'team_1793250191038' && !t.name.includes("'s Squad")
+        );
+
+        dispatch(setTeams(loadedTeams));
+
+        if (activeUser) {
+          const userTeams = getUserTeams(loadedTeams, activeUser);
+          if (userTeams.length > 0) {
+            const savedActiveTeamId = await loadActiveTeamId();
+            const validActive = userTeams.find((t) => t.id === savedActiveTeamId);
+            dispatch(setActiveTeamId(validActive ? validActive.id : userTeams[0].id));
+            dispatch(syncUserWithTeams(activeUser));
+          } else {
+            // When user belongs to NO teams, DO NOT create a new team automatically!
+            dispatch(setActiveTeamId(null));
+            dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: true }));
+          }
+        } else {
+          dispatch(setActiveTeamId(null));
         }
 
         // Check URL parameters for ?join=CODE
         const params = new URLSearchParams(window.location.search);
         const joinCode = params.get('join');
         if (joinCode) {
-          setInitialJoinCode(joinCode);
-          setIsJoinModalOpen(true);
+          dispatch(setInitialJoinCode(joinCode));
+          dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }));
         }
       } catch (err) {
         console.warn('Initialization error:', err);
       } finally {
-        setAuthLoading(false);
+        isInitializedRef.current = true;
+        dispatch(setAuthLoading(false));
       }
     }
-    init();
-  }, []);
 
-  // Active Team & Members resolution
-  const activeTeam = useMemo(() => {
-    return teams.find((t) => t.id === activeTeamId) || teams[0];
-  }, [teams, activeTeamId]);
+    initStorageSync();
+  }, [dispatch]);
 
-  const members = useMemo(() => {
-    return activeTeam?.members || [];
-  }, [activeTeam]);
-
-  // Save teams & Sync to native widget whenever teams or activeTeam changes
+  // 2. Persist Teams to Native Widget and External Storage
   useEffect(() => {
-    saveTeams(teams);
+    // CRITICAL: Never persist before initial storage sync finishes, to prevent wiping database with []
+    if (!isInitializedRef.current || authLoading) return;
+
+    if (Array.isArray(teams)) {
+      saveTeams(teams);
+    }
     if (activeTeam) {
       saveActiveTeamId(activeTeam.id);
       syncRosterToNative(activeTeam.members || [], tomorrow.shortDateStr);
+    } else {
+      saveActiveTeamId(null);
     }
-  }, [teams, activeTeam, tomorrow.shortDateStr]);
+  }, [teams, activeTeam, authLoading, tomorrow.shortDateStr]);
 
   // Toast trigger helper
-  const showToast = (msg) => {
-    setToastMessage(msg);
+  const showToastMsg = (msg) => {
+    dispatch(showToast(msg));
     setTimeout(() => {
-      setToastMessage(null);
+      dispatch(hideToast());
     }, 3200);
   };
 
   // Google Sign In Handler
   const handleGoogleSignIn = async (profile) => {
-    setGoogleUser(profile);
+    dispatch(setUser(profile));
     await saveGoogleUser(profile);
 
-    // If no teams exist yet, initialize a squad for this user
-    if (!teams || teams.length === 0) {
-      const defaultTeam = createNewTeam({
-        name: `${profile.name.split(' ')[0]}'s Squad`,
-        location: 'Office',
-        dept: 'Engineering',
-        ownerUser: profile,
-      });
-      setTeams([defaultTeam]);
-      setActiveTeamId(defaultTeam.id);
-      saveTeams([defaultTeam]);
-      saveActiveTeamId(defaultTeam.id);
-      showToast(`🎉 Signed in with Gmail! Created "${defaultTeam.name}"`);
-      return;
-    }
+    // Refresh authoritative teams from server
+    let loadedTeams = await loadTeams();
+    if (!Array.isArray(loadedTeams)) loadedTeams = [];
+    loadedTeams = loadedTeams.filter(
+      (t) => t.id !== 'team_1793250191038' && !t.name.includes("'s Squad")
+    );
+    dispatch(setTeams(loadedTeams));
 
-    // Sync user into active team members
-    const linkedMember = createOrUpdateMemberFromGoogle(profile, members);
-    if (linkedMember && activeTeam) {
-      setTeams((prevTeams) =>
-        prevTeams.map((t) => {
-          if (t.id !== activeTeam.id) return t;
-          const exists = t.members.some(
-            (m) =>
-              m.id === linkedMember.id ||
-              (m.email && linkedMember.email && m.email.toLowerCase() === linkedMember.email.toLowerCase()) ||
-              m.name.toLowerCase() === linkedMember.name.toLowerCase()
-          );
-          const updatedMembers = exists
-            ? t.members.map((m) =>
-                m.id === linkedMember.id ||
-                (m.email && linkedMember.email && m.email.toLowerCase() === linkedMember.email.toLowerCase())
-                  ? { ...m, ...linkedMember }
-                  : m
-              )
-            : [linkedMember, ...t.members];
-          return { ...t, members: updatedMembers };
-        })
-      );
+    // Check which teams the user belongs to
+    const userTeams = getUserTeams(loadedTeams, profile);
+    if (userTeams.length > 0) {
+      dispatch(syncUserWithTeams(profile));
+      const savedActiveTeamId = await loadActiveTeamId();
+      const validActive = userTeams.find((t) => t.id === savedActiveTeamId);
+      dispatch(setActiveTeamId(validActive ? validActive.id : userTeams[0].id));
+      showToastMsg(`Signed in as ${profile.name}`);
+    } else {
+      // Absolutely do NOT create a new squad or team automatically on login!
+      // Prompt user to Join a Team or Create a Team
+      dispatch(setActiveTeamId(null));
+      dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: true }));
+      showToastMsg(`Welcome, ${profile.name}! Join or create a team to get started.`);
     }
-
-    showToast(`Signed in with Gmail: ${profile.email}`);
   };
 
   // Google Sign Out Handler
   const handleGoogleSignOut = async () => {
-    setGoogleUser(null);
+    dispatch(clearUser());
+    dispatch(resetTeams());
     await clearGoogleUser();
-    showToast('Disconnected Google / Gmail account');
+    try {
+      localStorage.removeItem('office_active_team_id');
+      localStorage.removeItem('office_teams_list');
+    } catch {}
+    showToastMsg('Signed out successfully');
   };
 
   // Team: Create New Team
-  const handleCreateTeam = (newTeamData) => {
+  const handleCreateTeam = async (newTeamData) => {
     const created = createNewTeam(newTeamData);
-    setTeams((prev) => [created, ...prev]);
-    setActiveTeamId(created.id);
-    showToast(`🎉 Created team "${created.name}" (Code: ${created.code})`);
+    dispatch(addTeam(created));
+    await saveTeams([created, ...(teams || [])]);
+    await saveActiveTeamId(created.id);
+    showToastMsg(`🎉 Created team "${created.name}" (Code: ${created.code})`);
   };
 
   // Team: Select Active Team
   const handleSelectTeam = (teamId) => {
-    setActiveTeamId(teamId);
+    dispatch(setActiveTeamId(teamId));
     const target = teams.find((t) => t.id === teamId);
     if (target) {
-      showToast(`Switched to ${target.name}`);
+      showToastMsg(`Switched to ${target.name}`);
     }
   };
 
   // Team: Send Invite to Colleague
   const handleSendInvite = (teamId, inviteData) => {
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const existingInvites = t.invites || [];
-        const alreadyInvited = existingInvites.some(
-          (inv) => inv.email.toLowerCase() === inviteData.email.toLowerCase()
-        );
-        if (alreadyInvited) return t;
-        return { ...t, invites: [inviteData, ...existingInvites] };
-      })
-    );
+    dispatch(sendInvite({ teamId, invite: inviteData }));
   };
 
   // Team: Join Team by Code
-  const handleJoinTeamByCode = (teamId, user, freshTeamObj) => {
-    let targetTeam = teams.find((t) => t.id === teamId);
-    let workingTeams = teams;
+  const handleJoinTeamByCode = async (teamId, user, freshTeamObj) => {
+    dispatch(joinTeamByCode({ teamId, user, freshTeamObj }));
+    const target = (teams || []).find((t) => t.id === teamId) || freshTeamObj;
+    if (target) {
+      const newMember = {
+        id: user?.sub ? `m_${user.sub}` : `m_${Date.now()}`,
+        name: user?.name || 'Colleague',
+        email: user?.email || '',
+        role: 'Team Member',
+        dept: target.dept || 'Engineering',
+        status: 'office',
+        avatarBg: '#3b82f6',
+        desk: 'Office',
+        picture: user?.picture || null,
+      };
 
-    if (!targetTeam && freshTeamObj) {
-      targetTeam = freshTeamObj;
-      workingTeams = [freshTeamObj, ...teams.filter((t) => t.id !== freshTeamObj.id)];
-    }
-
-    if (!targetTeam) {
-      showToast('⚠️ Could not find team to join.');
-      return;
-    }
-
-    const newMember = {
-      id: user?.sub ? `m_${user.sub}` : `m_${Date.now()}`,
-      name: user?.name || 'Colleague',
-      email: user?.email || '',
-      role: 'Team Member',
-      dept: targetTeam.dept || 'Engineering',
-      status: 'office',
-      avatarBg: '#3b82f6',
-      desk: 'Office',
-      picture: user?.picture || null,
-    };
-
-    const updatedTeams = workingTeams.map((t) => {
-      if (t.id !== targetTeam.id) return t;
-      const exists = (t.members || []).some(
-        (m) =>
-          (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
-          m.name.toLowerCase() === newMember.name.toLowerCase()
-      );
-      if (exists) {
-        return {
-          ...t,
-          members: (t.members || []).map((m) =>
-            (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
-            m.name.toLowerCase() === newMember.name.toLowerCase()
-              ? { ...m, ...newMember, role: m.role || newMember.role }
-              : m
-          ),
+      const existingIndex = (teams || []).findIndex((t) => t.id === target.id);
+      let updatedTeams = [];
+      if (existingIndex !== -1) {
+        updatedTeams = teams.map((t) => {
+          if (t.id !== target.id) return t;
+          const currentMembers = t.members || [];
+          const exists = currentMembers.some(
+            (m) =>
+              (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
+              m.name.toLowerCase() === newMember.name.toLowerCase()
+          );
+          return {
+            ...t,
+            members: exists
+              ? currentMembers.map((m) =>
+                  (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
+                  m.name.toLowerCase() === newMember.name.toLowerCase()
+                    ? { ...m, ...newMember, role: m.role || newMember.role }
+                    : m
+                )
+              : [newMember, ...currentMembers],
+          };
+        });
+      } else {
+        const joinedTeam = {
+          ...target,
+          members: [
+            newMember,
+            ...(target.members || []).filter(
+              (m) =>
+                !(
+                  (m.email && user?.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
+                  m.name.toLowerCase() === newMember.name.toLowerCase()
+                )
+            ),
+          ],
         };
+        updatedTeams = [joinedTeam, ...(teams || [])];
       }
-      return { ...t, members: [newMember, ...(t.members || [])] };
-    });
 
-    setTeams(updatedTeams);
-    setActiveTeamId(targetTeam.id);
-    saveTeams(updatedTeams);
-    saveActiveTeamId(targetTeam.id);
-    showToast(`🎉 Joined team "${targetTeam.name}"!`);
+      await saveTeams(updatedTeams);
+      await saveActiveTeamId(target.id);
+      showToastMsg(`🎉 Joined team "${target.name}"!`);
+    } else {
+      showToastMsg('⚠️ Could not find team to join.');
+    }
   };
 
-  // Team: Request to Join Team (Vice-Versa)
+  // Team: Request to Join Team
   const handleRequestJoinTeam = (teamId, user) => {
     const targetTeam = teams.find((t) => t.id === teamId);
     if (!targetTeam) return;
@@ -274,91 +338,94 @@ export function App() {
       date: new Date().toLocaleDateString(),
     };
 
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const reqs = t.joinRequests || [];
-        return { ...t, joinRequests: [request, ...reqs] };
-      })
-    );
-
-    showToast(`Request sent to join ${targetTeam.name}. Waiting for approval!`);
+    dispatch(requestJoin({ teamId, request }));
+    showToastMsg(`Request sent to join ${targetTeam.name}. Waiting for approval!`);
   };
 
   // Team: Approve Join Request
   const handleApproveRequest = (teamId, request) => {
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const newMember = {
-          id: `m_${Date.now()}`,
-          name: request.name,
-          email: request.email,
-          role: request.role || 'Team Member',
-          dept: request.dept || t.dept || 'General',
-          status: 'office',
-          avatarBg: '#10b981',
-          desk: 'Office',
-        };
-        const updatedReqs = (t.joinRequests || []).filter((r) => r.id !== request.id);
-        return {
-          ...t,
-          members: [newMember, ...t.members],
-          joinRequests: updatedReqs,
-        };
-      })
-    );
-    showToast(`Approved ${request.name}! Added to team roster.`);
+    dispatch(approveJoinRequest({ teamId, request }));
+    showToastMsg(`Approved ${request.name}! Added to team roster.`);
   };
 
   // Team: Reject Join Request
   const handleRejectRequest = (teamId, requestId) => {
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const updatedReqs = (t.joinRequests || []).filter((r) => r.id !== requestId);
-        return { ...t, joinRequests: updatedReqs };
-      })
-    );
-    showToast('Declined join request.');
+    dispatch(rejectJoinRequest({ teamId, requestId }));
+    showToastMsg('Declined join request.');
   };
 
   // Team: Accept Invitation
   const handleAcceptInvite = (teamId, user) => {
-    handleJoinTeamByCode(teamId, user);
-    // Remove invite from team
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const filteredInvites = (t.invites || []).filter(
-          (inv) => inv.email.toLowerCase() !== (user?.email || '').toLowerCase()
-        );
-        return { ...t, invites: filteredInvites };
-      })
+    dispatch(acceptInvite({ teamId, user }));
+  };
+
+  // Team: Exit / Leave Active Team Permanently
+  const handleExitTeam = async () => {
+    if (!activeTeam || !googleUser) return;
+    const teamName = activeTeam.name;
+    const teamIdToLeave = activeTeam.id;
+    const confirmed = window.confirm(
+      `Are you sure you want to exit "${teamName}"? You will be removed permanently from this team roster.`
     );
+    if (!confirmed) return;
+
+    const userEmail = (googleUser.email || '').toLowerCase().trim();
+    const userId = googleUser.sub || googleUser.id;
+
+    // 1. Dispatch leaveTeam in Redux
+    dispatch(leaveTeam({ teamId: teamIdToLeave, user: googleUser }));
+
+    // 2. Compute updated teams directly for immediate persistence
+    const updatedTeams = teams
+      .map((t) => {
+        if (t.id !== teamIdToLeave) return t;
+        const remainingMembers = (t.members || []).filter(
+          (m) =>
+            !(
+              (m.googleId && userId && m.googleId === userId) ||
+              (m.email && userEmail && m.email.toLowerCase().trim() === userEmail) ||
+              (m.name && googleUser.name && m.name.toLowerCase().trim() === googleUser.name.toLowerCase().trim())
+            )
+        );
+        const isOwner = t.ownerEmail && t.ownerEmail.toLowerCase().trim() === userEmail;
+        if (remainingMembers.length === 0 || isOwner) {
+          return null;
+        }
+        return {
+          ...t,
+          members: remainingMembers,
+          invites: (t.invites || []).filter((inv) => (inv.email || '').toLowerCase().trim() !== userEmail),
+          joinRequests: (t.joinRequests || []).filter((req) => (req.email || '').toLowerCase().trim() !== userEmail),
+        };
+      })
+      .filter(Boolean);
+
+    // 3. Immediately persist updated teams and active team ID
+    await saveTeams(updatedTeams);
+
+    const remainingUserTeams = getUserTeams(updatedTeams, googleUser);
+    const nextActiveTeamId = remainingUserTeams.length > 0 ? remainingUserTeams[0].id : null;
+    await saveActiveTeamId(nextActiveTeamId);
+
+    if (!nextActiveTeamId) {
+      dispatch(setActiveTeamId(null));
+      dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: true }));
+    }
+
+    showToastMsg(`You have permanently left "${teamName}".`);
   };
 
   // Roster: Add Member to Active Team
   const handleAddMember = (newMember) => {
     if (!activeTeam) return;
-    setTeams((prev) =>
-      prev.map((t) => (t.id === activeTeam.id ? { ...t, members: [newMember, ...t.members] } : t))
-    );
-    showToast(`Added ${newMember.name} to ${activeTeam.name}!`);
+    dispatch(addMemberToTeam({ teamId: activeTeam.id, member: newMember }));
+    showToastMsg(`Added ${newMember.name} to ${activeTeam.name}!`);
   };
 
   // Roster: Update Status for a member
   const handleStatusChange = (id, newStatus) => {
     if (!activeTeam) return;
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== activeTeam.id) return t;
-        return {
-          ...t,
-          members: t.members.map((m) => (m.id === id ? { ...m, status: newStatus } : m)),
-        };
-      })
-    );
+    dispatch(updateMemberStatus({ teamId: activeTeam.id, memberId: id, status: newStatus }));
   };
 
   // Roster: Delete Member from Active Team
@@ -368,49 +435,17 @@ export function App() {
     if (!toDelete) return;
     const confirmed = window.confirm(`Remove ${toDelete.name} from ${activeTeam.name}?`);
     if (confirmed) {
-      setTeams((prev) =>
-        prev.map((t) => {
-          if (t.id !== activeTeam.id) return t;
-          return {
-            ...t,
-            members: t.members.filter((m) => m.id !== id),
-          };
-        })
-      );
-      showToast(`Removed ${toDelete.name}`);
+      dispatch(deleteMemberFromTeam({ teamId: activeTeam.id, memberId: id }));
+      showToastMsg(`Removed ${toDelete.name}`);
     }
   };
 
   // Roster: Self Check-in Status
   const handleSetMyStatus = (status) => {
     if (!activeTeam) return;
-    const myIdentifier = googleUser?.email || googleUser?.name || 'Gokulakrishnan';
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== activeTeam.id) return t;
-        let matched = false;
-        const updatedMembers = t.members.map((m) => {
-          if (
-            (m.email && googleUser?.email && m.email.toLowerCase() === googleUser.email.toLowerCase()) ||
-            m.name.toLowerCase() === myIdentifier.toLowerCase() ||
-            m.isOwner
-          ) {
-            matched = true;
-            return { ...m, status };
-          }
-          return m;
-        });
-
-        if (!matched && t.members.length > 0) {
-          updatedMembers[0] = { ...updatedMembers[0], status };
-        }
-
-        return { ...t, members: updatedMembers };
-      })
-    );
-
+    dispatch(setSelfStatus({ teamId: activeTeam.id, status, user: googleUser }));
     const label = status === 'office' ? 'Office 🏢' : status === 'wfh' ? 'WFH 🏠' : 'Leave 🌴';
-    showToast(`Your status updated to ${label}`);
+    showToastMsg(`Your status updated to ${label}`);
   };
 
   // Roster: Copy Slack / WhatsApp Summary
@@ -427,23 +462,67 @@ export function App() {
         document.execCommand('copy');
         document.body.removeChild(textArea);
       }
-      showToast(`📋 Copied ${activeTeam.name} roster summary!`);
+      showToastMsg(`📋 Copied ${activeTeam?.name || 'team'} roster summary!`);
     } catch {
-      showToast('⚠️ Could not copy to clipboard');
+      showToastMsg('⚠️ Could not copy to clipboard');
     }
   };
 
-  // Bulk: Mark All Office
-  const handleMarkAllOffice = () => {
-    if (!activeTeam) return;
-    setTeams((prev) =>
-      prev.map((t) =>
-        t.id === activeTeam.id
-          ? { ...t, members: t.members.map((m) => ({ ...m, status: 'office' })) }
-          : t
-      )
+  // Permission helper: Can current user edit this member's position and roles?
+  // Strictly restricted: Only the Team Author (👑 Team Author) can edit positions & roles in the team
+  const canEditMember = (member) => {
+    if (!member || !googleUser) return false;
+    return Boolean(isAuthor);
+  };
+
+  // Profile: Open User's Own Profile Edit Modal
+  const handleOpenMyProfileEdit = (member) => {
+    const target = member || myMember;
+    if (!target) {
+      showToastMsg('⚠️ Please join or create a team first to edit your profile.');
+      return;
+    }
+    setEditingMember(target);
+    dispatch(setModalOpen({ modalName: 'isEditMemberOpen', isOpen: true }));
+  };
+
+  // Roster: Save Member Position & Roles
+  const handleSaveMemberProfile = async ({ memberId, position, roles, dept, desk }) => {
+    const targetMember = members.find((m) => m.id === memberId);
+    if (!activeTeam || !targetMember) {
+      showToastMsg('⚠️ Member not found in team.');
+      return;
+    }
+
+    const userEmail = (googleUser?.email || '').toLowerCase().trim();
+    const userId = googleUser?.sub || googleUser?.id;
+    const isSelf =
+      (targetMember.email && userEmail && targetMember.email.toLowerCase().trim() === userEmail) ||
+      (targetMember.googleId && userId && targetMember.googleId === userId) ||
+      (myMember && targetMember.id === myMember.id);
+
+    if (!isSelf && !isAuthor) {
+      showToastMsg('⚠️ You can only edit your own profile.');
+      return;
+    }
+
+    dispatch(
+      updateMemberProfile({
+        teamId: activeTeam.id,
+        memberId,
+        updates: { position, roles, dept, desk },
+      })
     );
-    showToast('Marked all members as Coming to Office 🏢');
+
+    const updatedMembers = members.map((m) =>
+      m.id === memberId ? { ...m, position, roles, dept, desk } : m
+    );
+    const updatedTeams = teams.map((t) =>
+      t.id === activeTeam.id ? { ...t, members: updatedMembers } : t
+    );
+    await saveTeams(updatedTeams);
+
+    showToastMsg('Updated profile position & roles! 💼');
   };
 
   // Filtered members for display
@@ -454,7 +533,9 @@ export function App() {
       const matchesSearch =
         !q ||
         m.name.toLowerCase().includes(q) ||
-        m.role.toLowerCase().includes(q) ||
+        (m.position && m.position.toLowerCase().includes(q)) ||
+        (m.role && m.role.toLowerCase().includes(q)) ||
+        (Array.isArray(m.roles) && m.roles.some((r) => r.toLowerCase().includes(q))) ||
         m.dept.toLowerCase().includes(q) ||
         (m.email && m.email.toLowerCase().includes(q)) ||
         (m.desk && m.desk.toLowerCase().includes(q));
@@ -466,8 +547,11 @@ export function App() {
     members.find(
       (m) =>
         (m.email && googleUser?.email && m.email.toLowerCase() === googleUser.email.toLowerCase()) ||
-        m.name === (googleUser ? googleUser.name : 'Gokulakrishnan')
-    ) || members[0] || (googleUser ? { name: googleUser.name, status: 'office' } : null);
+        (m.googleId && googleUser?.sub && m.googleId === googleUser.sub) ||
+        (m.isOwner && activeTeam?.ownerEmail && googleUser?.email && activeTeam.ownerEmail.toLowerCase() === googleUser.email.toLowerCase())
+    ) || (googleUser ? { name: googleUser.name, status: 'office' } : null);
+
+  const userTeams = useMemo(() => getUserTeams(teams, googleUser), [teams, googleUser]);
 
   // 1. Loading splash screen while checking persistent auth
   if (authLoading) {
@@ -520,42 +604,22 @@ export function App() {
           {/* Active Team Selector Dropdown */}
           <TeamHeaderDropdown
             activeTeam={activeTeam}
-            allTeams={teams}
+            allTeams={userTeams}
             onSelectTeam={handleSelectTeam}
-            onOpenCreateModal={() => setIsCreateTeamOpen(true)}
-            onOpenJoinModal={() => setIsJoinModalOpen(true)}
-            onOpenInviteModal={() => setIsInviteModalOpen(true)}
+            onOpenCreateModal={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: true }))}
+            onOpenJoinModal={() => dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }))}
+            onOpenInviteModal={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: true }))}
+            onOpenChoiceModal={() => dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: true }))}
+            onExitTeam={handleExitTeam}
           />
 
           <div className="header-actions">
-            {/* Create Team Button */}
-            <button
-              type="button"
-              className="btn-header-team-action btn-create-team-header"
-              onClick={() => setIsCreateTeamOpen(true)}
-              title="Create a new office team"
-              aria-label="Create Team"
-            >
-              ➕ Create Team
-            </button>
-
-            {/* Join Team Button */}
-            <button
-              type="button"
-              className="btn-header-team-action btn-join-team-header"
-              onClick={() => setIsJoinModalOpen(true)}
-              title="Join an existing team with code"
-              aria-label="Join Team"
-            >
-              🤝 Join Team
-            </button>
-
             {/* Google Account Profile & Sign Out Button */}
             <div className="header-account-pill">
               <button
                 type="button"
                 className="btn-header-profile"
-                onClick={() => setIsGoogleModalOpen(true)}
+                onClick={() => dispatch(setModalOpen({ modalName: 'isGoogleModalOpen', isOpen: true }))}
                 title={`Signed in as ${googleUser.name} (${googleUser.email}). Click to view details.`}
                 aria-label="Google account settings"
               >
@@ -571,6 +635,18 @@ export function App() {
                   <span className="header-user-email">{googleUser.email}</span>
                 </div>
               </button>
+              {activeTeam && myMember && (
+                <button
+                  type="button"
+                  className="btn-header-edit-profile"
+                  onClick={() => handleOpenMyProfileEdit(myMember)}
+                  title="Edit your position and roles"
+                  aria-label="Edit Profile"
+                >
+                  <span className="edit-icon">✏️</span>
+                  <span>Edit Profile</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-header-signout"
@@ -587,25 +663,25 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="app-main">
-        {teams.length === 0 ? (
+        {!activeTeam ? (
           <div className="empty-state-card no-teams-welcome">
             <span className="empty-state-emoji">🏢</span>
-            <h2 className="empty-state-title">Welcome to Office Team Roster</h2>
+            <h2 className="empty-state-title">Welcome to Office Team Roster, {googleUser?.name?.split(' ')[0] || ''}!</h2>
             <p className="empty-state-text">
-              Track who is coming to the office tomorrow. Create an office squad for your team or enter a Team Code to join your colleagues!
+              Track who is coming to the office tomorrow. Get started by joining your colleagues' team with a Team Code or creating a new team!
             </p>
             <div className="empty-state-actions">
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => setIsCreateTeamOpen(true)}
+                onClick={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: true }))}
               >
                 ➕ Create a Team
               </button>
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => setIsJoinModalOpen(true)}
+                onClick={() => dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }))}
               >
                 🤝 Join with Code
               </button>
@@ -614,248 +690,246 @@ export function App() {
         ) : (
           <>
             {/* Team Invitations & Join Requests Banner */}
-        <TeamNotificationBanner
-          activeTeam={activeTeam}
-          onApproveRequest={handleApproveRequest}
-          onRejectRequest={handleRejectRequest}
-          currentUser={googleUser}
-          allTeams={teams}
-          onAcceptInvite={handleAcceptInvite}
-        />
-
-        {/* Quick Self-Checkin Banner */}
-        <SelfCheckinBanner
-          myName={myMember ? myMember.name : (googleUser ? googleUser.name : 'You')}
-          myStatus={myMember ? myMember.status : 'office'}
-          onSetMyStatus={handleSetMyStatus}
-          tomorrowDateStr={tomorrow.shortDateStr}
-          onOpenCalendar={() => setIsCalendarModalOpen(true)}
-        />
-
-        {/* Attendance Summary KPIs for Active Team */}
-        <SummaryCards
-          members={members}
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
-        />
-
-        {/* Live Android Home Screen Widget Preview */}
-        <OfficeWidgetPreview
-          members={members}
-          tomorrowDateStr={tomorrow.shortDateStr}
-          onOpenAddModal={() => setIsAddModalOpen(true)}
-        />
-
-        {/* Controls Toolbar: Search, Filters, and Bulk Actions */}
-        <section className="toolbar-section">
-          <div className="search-box">
-            <span className="search-icon">🔍</span>
-            <input
-              type="search"
-              className="search-input"
-              placeholder={`Search in ${activeTeam?.name || 'team'}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search members"
+            <TeamNotificationBanner
+              activeTeam={activeTeam}
+              onApproveRequest={handleApproveRequest}
+              onRejectRequest={handleRejectRequest}
+              currentUser={googleUser}
+              allTeams={teams}
+              onAcceptInvite={handleAcceptInvite}
             />
-            {searchQuery && (
-              <button
-                type="button"
-                className="btn-clear-search"
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-          </div>
 
-          <div className="filter-pill-row">
-            <button
-              type="button"
-              className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('all')}
-            >
-              All ({members.length})
-            </button>
-            <button
-              type="button"
-              className={`filter-tab filter-office ${activeFilter === 'office' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('office')}
-            >
-              🏢 Office ({members.filter((m) => m.status === 'office').length})
-            </button>
-            <button
-              type="button"
-              className={`filter-tab filter-wfh ${activeFilter === 'wfh' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('wfh')}
-            >
-              🏠 WFH ({members.filter((m) => m.status === 'wfh').length})
-            </button>
-            <button
-              type="button"
-              className={`filter-tab filter-leave ${activeFilter === 'leave' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('leave')}
-            >
-              🌴 Leave ({members.filter((m) => m.status === 'leave').length})
-            </button>
-          </div>
+            {/* Quick Self-Checkin Banner */}
+            <SelfCheckinBanner
+              myName={myMember ? myMember.name : (googleUser ? googleUser.name : 'You')}
+              myStatus={myMember ? myMember.status : 'office'}
+              onSetMyStatus={handleSetMyStatus}
+              tomorrowDateStr={tomorrow.shortDateStr}
+              onOpenCalendar={() => dispatch(setModalOpen({ modalName: 'isCalendarModalOpen', isOpen: true }))}
+              onEditProfile={() => handleOpenMyProfileEdit(myMember)}
+            />
 
-          <div className="bulk-actions-row">
-            <button
-              type="button"
-              className="btn-link-action"
-              onClick={handleMarkAllOffice}
-            >
-              🏢 Mark All as Coming
-            </button>
-            <span className="bulk-divider">•</span>
-            <button
-              type="button"
-              className="btn-link-action"
-              onClick={handleCopySummary}
-            >
-              📋 Copy Roster for Slack/WhatsApp
-            </button>
-            <span className="bulk-divider">•</span>
-            <button
-              type="button"
-              className="btn-link-action"
-              onClick={() => setIsInviteModalOpen(true)}
-            >
-              ✉️ Invite to {activeTeam?.name}
-            </button>
-          </div>
-        </section>
+            {/* Attendance Summary KPIs for Active Team */}
+            <SummaryCards
+              members={members}
+              activeFilter={activeFilter}
+              onFilterChange={(filter) => dispatch(setActiveFilter(filter))}
+            />
 
-        {/* Team Members List */}
-        <section className="members-section" aria-label="Team members roster">
-          <div className="members-header">
-            <div>
-              <h2 className="members-heading">
-                {activeTeam?.name} ({filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'})
-              </h2>
-              <p className="members-subheading">📍 {activeTeam?.location}</p>
-            </div>
-            <div className="members-header-actions">
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={() => setIsInviteModalOpen(true)}
-              >
-                ✉️ Invite
-              </button>
-              <button
-                type="button"
-                className="btn-add-inline"
-                onClick={() => setIsAddModalOpen(true)}
-              >
-                ➕ Add Colleague
-              </button>
-            </div>
-          </div>
+            {/* Live Android Home Screen Widget Preview */}
+            <OfficeWidgetPreview
+              members={members}
+              tomorrowDateStr={tomorrow.shortDateStr}
+            />
 
-          {filteredMembers.length === 0 ? (
-            <div className="empty-state-card">
-              <span className="empty-state-emoji">🔍</span>
-              <h3 className="empty-state-title">No matching team members found</h3>
-              <p className="empty-state-text">
-                Try adjusting your search query, or invite colleagues to join {activeTeam?.name}.
-              </p>
-              <div className="empty-state-actions">
+            {/* Controls Toolbar: Search, Filters, and Bulk Actions */}
+            <section className="toolbar-section">
+              <div className="search-box">
+                <span className="search-icon">🔍</span>
+                <input
+                  type="search"
+                  className="search-input"
+                  placeholder={`Search in ${activeTeam?.name || 'team'}...`}
+                  value={searchQuery}
+                  onChange={(e) => dispatch(setSearchQuery(e.target.value))}
+                  aria-label="Search members"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="btn-clear-search"
+                    onClick={() => dispatch(setSearchQuery(''))}
+                    aria-label="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="filter-pill-row">
                 <button
                   type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setActiveFilter('all');
-                  }}
+                  className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => dispatch(setActiveFilter('all'))}
                 >
-                  Clear Filters
+                  All ({members.length})
                 </button>
                 <button
                   type="button"
-                  className="btn-primary"
-                  onClick={() => setIsInviteModalOpen(true)}
+                  className={`filter-tab filter-office ${activeFilter === 'office' ? 'active' : ''}`}
+                  onClick={() => dispatch(setActiveFilter('office'))}
                 >
-                  Invite Colleagues
+                  🏢 Office ({members.filter((m) => m.status === 'office').length})
+                </button>
+                <button
+                  type="button"
+                  className={`filter-tab filter-wfh ${activeFilter === 'wfh' ? 'active' : ''}`}
+                  onClick={() => dispatch(setActiveFilter('wfh'))}
+                >
+                  🏠 WFH ({members.filter((m) => m.status === 'wfh').length})
+                </button>
+                <button
+                  type="button"
+                  className={`filter-tab filter-leave ${activeFilter === 'leave' ? 'active' : ''}`}
+                  onClick={() => dispatch(setActiveFilter('leave'))}
+                >
+                  🌴 Leave ({members.filter((m) => m.status === 'leave').length})
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="members-grid">
-              {filteredMembers.map((member) => (
-                <MemberCard
-                  key={member.id}
-                  member={member}
-                  onStatusChange={handleStatusChange}
-                  onDeleteMember={handleDeleteMember}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      </>
-    )}
-  </main>
+
+              <div className="bulk-actions-row">
+                <button
+                  type="button"
+                  className="btn-link-action"
+                  onClick={handleCopySummary}
+                >
+                  📋 Copy Roster for Slack/WhatsApp
+                </button>
+              </div>
+            </section>
+
+            {/* Team Members List */}
+            <section className="members-section" aria-label="Team members roster">
+              <div className="members-header">
+                <div>
+                  <h2 className="members-heading">
+                    {activeTeam?.name} ({filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'})
+                  </h2>
+                  <p className="members-subheading">📍 {activeTeam?.location}</p>
+                </div>
+                <div className="members-header-actions">
+                  <button
+                    type="button"
+                    className="btn-exit-team"
+                    onClick={handleExitTeam}
+                    title={`Exit ${activeTeam?.name}`}
+                  >
+                    🚪 Exit Team
+                  </button>
+                </div>
+              </div>
+
+              {filteredMembers.length === 0 ? (
+                <div className="empty-state-card">
+                  <span className="empty-state-emoji">🔍</span>
+                  <h3 className="empty-state-title">No matching team members found</h3>
+                  <p className="empty-state-text">
+                    Try adjusting your search query, or invite colleagues to join {activeTeam?.name}.
+                  </p>
+                  <div className="empty-state-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        dispatch(setSearchQuery(''));
+                        dispatch(setActiveFilter('all'));
+                      }}
+                    >
+                      Clear Filters
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: true }))}
+                    >
+                      Invite Colleagues
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="members-grid">
+                  {filteredMembers.map((member) => (
+                    <MemberCard
+                      key={member.id}
+                      member={member}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </main>
 
       {/* Add Member Modal */}
       <AddMemberModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        isOpen={modals.isAddModalOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isAddModalOpen', isOpen: false }))}
         onAddMember={handleAddMember}
       />
 
-      {/* Google / Gmail Login Modal */}
+      {/* Google / Gmail Login Modal & User Profile */}
       <GoogleLoginModal
-        isOpen={isGoogleModalOpen}
-        onClose={() => setIsGoogleModalOpen(false)}
+        isOpen={modals.isGoogleModalOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isGoogleModalOpen', isOpen: false }))}
         currentUser={googleUser}
         onGoogleSignIn={handleGoogleSignIn}
         onSignOut={handleGoogleSignOut}
+        currentMember={myMember}
+        activeTeam={activeTeam}
+        onEditProfile={handleOpenMyProfileEdit}
       />
 
       {/* Google Calendar Modal */}
       <GoogleCalendarModal
-        isOpen={isCalendarModalOpen}
-        onClose={() => setIsCalendarModalOpen(false)}
+        isOpen={modals.isCalendarModalOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isCalendarModalOpen', isOpen: false }))}
         currentMember={myMember}
         tomorrowDetails={tomorrow}
         allMembers={members}
-        onToast={showToast}
+        onToast={showToastMsg}
       />
 
       {/* Create Team Modal */}
       <CreateTeamModal
-        isOpen={isCreateTeamOpen}
-        onClose={() => setIsCreateTeamOpen(false)}
+        isOpen={modals.isCreateTeamOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: false }))}
         onCreateTeam={handleCreateTeam}
         currentUser={googleUser}
       />
 
       {/* Invite Colleagues Modal */}
       <InviteColleaguesModal
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
+        isOpen={modals.isInviteModalOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: false }))}
         activeTeam={activeTeam}
         onSendInvite={handleSendInvite}
         onApproveRequest={handleApproveRequest}
         onRejectRequest={handleRejectRequest}
-        onToast={showToast}
+        onToast={showToastMsg}
       />
 
       {/* Join Team Modal */}
       <JoinTeamModal
-        isOpen={isJoinModalOpen}
+        isOpen={modals.isJoinModalOpen}
         onClose={() => {
-          setIsJoinModalOpen(false);
-          setInitialJoinCode('');
+          dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: false }));
+          dispatch(setInitialJoinCode(''));
         }}
         allTeams={teams}
         currentUser={googleUser}
         onJoinTeamByCode={handleJoinTeamByCode}
         onRequestJoinTeam={handleRequestJoinTeam}
         initialCode={initialJoinCode}
+      />
+
+      {/* Join or Create Team Choice Modal (Shown on Login when user has no team) */}
+      <TeamChoiceModal
+        isOpen={modals.isTeamChoiceModalOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: false }))}
+        currentUser={googleUser}
+        onChooseJoin={() => dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }))}
+        onChooseCreate={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: true }))}
+      />
+
+      {/* Edit Member Position & Roles Modal */}
+      <EditMemberModal
+        isOpen={modals.isEditMemberOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isEditMemberOpen', isOpen: false }))}
+        member={editingMember}
+        teamName={activeTeam?.name}
+        currentUser={googleUser}
+        onSave={handleSaveMemberProfile}
       />
     </div>
   );

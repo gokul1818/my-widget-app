@@ -47,6 +47,50 @@ export function findTeamByCode(teams, searchCode) {
   return null;
 }
 
+/**
+ * Checks whether a user belongs to a team (strictly checks members roster)
+ */
+export function isUserInTeam(team, user) {
+  if (!team || !user || !Array.isArray(team.members)) return false;
+  const userEmail = (user.email || '').toLowerCase().trim();
+  const userId = user.sub || user.id;
+
+  return team.members.some((m) => {
+    if (m.googleId && userId && m.googleId === userId) return true;
+    if (m.email && userEmail && m.email.toLowerCase().trim() === userEmail) return true;
+    return false;
+  });
+}
+
+/**
+ * Checks whether a user is the author/creator of a team
+ */
+export function isTeamAuthor(team, user) {
+  if (!team || !user) return false;
+  const userEmail = (user.email || '').toLowerCase().trim();
+  const userId = user.sub || user.id;
+
+  if (team.ownerEmail && team.ownerEmail.toLowerCase().trim() === userEmail) {
+    return true;
+  }
+  if (Array.isArray(team.members)) {
+    const ownerMember = team.members.find((m) => m.isOwner);
+    if (ownerMember) {
+      if (ownerMember.googleId && userId && ownerMember.googleId === userId) return true;
+      if (ownerMember.email && userEmail && ownerMember.email.toLowerCase().trim() === userEmail) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns all teams that a user is a member of
+ */
+export function getUserTeams(teams, user) {
+  if (!Array.isArray(teams) || !user) return [];
+  return teams.filter((t) => isUserInTeam(t, user));
+}
+
 // Clean initial teams: NO DUMMY DATA
 export const initialTeams = [];
 
@@ -92,13 +136,14 @@ export async function loadTeams() {
  * Saves teams to Vercel DB API and local storage
  */
 export async function saveTeams(teams) {
-  // 1. Sync to Vercel DB in background
+  if (!Array.isArray(teams)) return;
+  // 1. Sync to serverless API / Dev server
   try {
-    fetch('/api/teams', {
+    await fetch('/api/teams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teams }),
-    }).catch(() => {});
+    });
   } catch {
     // offline or local dev
   }
@@ -136,17 +181,21 @@ export async function loadActiveTeamId() {
 }
 
 /**
- * Saves active team ID
+ * Saves active team ID (removes from storage when id is null)
  */
 export async function saveActiveTeamId(id) {
-  if (!id) return;
   try {
+    if (!id) {
+      await Preferences.remove({ key: ACTIVE_TEAM_STORAGE_KEY }).catch(() => {});
+      try {
+        localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+      } catch {}
+      return;
+    }
     await Preferences.set({ key: ACTIVE_TEAM_STORAGE_KEY, value: id });
     try {
       localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, id);
-    } catch {
-      // ignore
-    }
+    } catch {}
   } catch (err) {
     console.warn('Error saving active team ID:', err);
   }
@@ -157,10 +206,10 @@ export async function saveActiveTeamId(id) {
  */
 export function createNewTeam({ name, location, dept = 'General', ownerUser }) {
   const code = generateTeamCode(name);
-  const teamId = `team_${Date.now()}`;
+  const teamId = `team_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
 
   const ownerMember = {
-    id: `m_${Date.now()}`,
+    id: `m_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`,
     name: ownerUser?.name || 'You',
     email: ownerUser?.email || '',
     role: 'Team Lead',
@@ -169,6 +218,7 @@ export function createNewTeam({ name, location, dept = 'General', ownerUser }) {
     avatarBg: '#10b981',
     desk: 'Office',
     isOwner: true,
+    teamId,
   };
 
   return {

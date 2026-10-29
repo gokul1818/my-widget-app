@@ -23,7 +23,7 @@ export function AddMemberModal({ isOpen, onClose, onAddMember }) {
     const color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
     const newMember = {
-      id: Date.now().toString(),
+      id: `m_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`,
       name: trimmed,
       role: role.trim() || 'Team Member',
       dept,

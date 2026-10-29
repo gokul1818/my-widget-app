@@ -11,6 +11,9 @@ export function GoogleLoginModal({
   currentUser,
   onGoogleSignIn,
   onSignOut,
+  currentMember,
+  activeTeam,
+  onEditProfile,
 }) {
   const [clientId, setClientId] = useState(() => {
     return import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('google_client_id') || '';
@@ -190,18 +193,69 @@ export function GoogleLoginModal({
               </div>
             </div>
 
+            {/* Team Roster Profile Details */}
+            {activeTeam && currentMember && (
+              <div className="profile-roster-box">
+                <div className="profile-roster-header">
+                  <div>
+                    <span className="profile-roster-badge">🏢 {activeTeam.name.toUpperCase()} ROSTER PROFILE</span>
+                    <h4 className="profile-roster-title">{currentMember.position || 'Team Member'}</h4>
+                  </div>
+                  {onEditProfile && (
+                    <button
+                      type="button"
+                      className="btn-profile-edit-trigger"
+                      onClick={() => {
+                        onClose();
+                        onEditProfile(currentMember);
+                      }}
+                      title="Edit your position and roles"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
+                </div>
+                <div className="profile-roster-meta">
+                  <div className="profile-roster-meta-item">
+                    <span className="meta-label">Assigned Roles:</span>
+                    <span className="meta-value">
+                      {Array.isArray(currentMember.roles) && currentMember.roles.length > 0
+                        ? currentMember.roles.join(', ')
+                        : currentMember.role || 'Team Member'}
+                    </span>
+                  </div>
+                  <div className="profile-roster-meta-item">
+                    <span className="meta-label">Department:</span>
+                    <span className="meta-value">{currentMember.dept || 'Engineering'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <p className="google-connected-note">
               ✅ Authenticated via Google OAuth 2.0. Status and schedule are securely synced.
             </p>
 
             <div className="modal-actions">
+              {onEditProfile && currentMember && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    onClose();
+                    onEditProfile(currentMember);
+                  }}
+                >
+                  ✏️ Edit Position & Roles
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-secondary"
                 onClick={handleLaunchGoogleOAuth}
                 disabled={isLoadingAuth}
               >
-                Switch Google Account
+                Switch Account
               </button>
               <button
                 type="button"

@@ -11,3 +11,5 @@ export { JoinTeamModal } from './JoinTeamModal';
 export { TeamHeaderDropdown } from './TeamHeaderDropdown';
 export { TeamNotificationBanner } from './TeamNotificationBanner';
 export { LoginScreen } from './LoginScreen';
+export { TeamChoiceModal } from './TeamChoiceModal';
+export { EditMemberModal } from './EditMemberModal';

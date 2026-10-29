@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function OfficeWidgetPreview({ members, tomorrowDateStr, onOpenAddModal }) {
+export function OfficeWidgetPreview({ members, tomorrowDateStr }) {
   const officeMembers = members.filter((m) => m.status === 'office');
   const wfhMembers = members.filter((m) => m.status === 'wfh');
   const leaveMembers = members.filter((m) => m.status === 'leave');
@@ -35,20 +35,6 @@ export function OfficeWidgetPreview({ members, tomorrowDateStr, onOpenAddModal }
             <span className="widget-pill-divider">•</span>
             <span>{leaveMembers.length} Leave</span>
           </div>
-        </div>
-
-        {/* Widget Bottom Buttons */}
-        <div className="widget-bar-actions">
-          <div className="widget-btn-mock widget-btn-ghost">
-            <span>🔄 Refresh</span>
-          </div>
-          <button
-            type="button"
-            className="widget-btn-mock widget-btn-highlight"
-            onClick={onOpenAddModal}
-          >
-            <span>➕ Add / Update</span>
-          </button>
         </div>
       </div>
     </div>

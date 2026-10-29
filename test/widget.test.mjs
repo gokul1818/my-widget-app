@@ -21,6 +21,9 @@ import {
   initialTeams,
   normalizeTeamCode,
   findTeamByCode,
+  getUserTeams,
+  isUserInTeam,
+  isTeamAuthor,
 } from '../src/utils/teamData.js';
 
 test('Office Roster: Clean state has zero dummy members', () => {
@@ -211,24 +214,15 @@ test('Gmail Auth: auto-name extraction from email prefix formats correctly', () 
   assert.equal(deriveNameFromEmail('alex@company.com'), 'Alex');
 });
 
-test('Gmail Auth: authenticating user with zero teams initializes a squad', () => {
+test('Gmail Auth: user with zero teams does not have a squad or team created automatically', () => {
   const realUser = {
     name: 'Gokulakrishnan',
     email: 'gokul@gmail.com',
   };
 
-  const initialSquad = createNewTeam({
-    name: `${realUser.name.split(' ')[0]}'s Squad`,
-    location: 'Office',
-    dept: 'Engineering',
-    ownerUser: realUser,
-  });
-
-  assert.equal(initialSquad.name, "Gokulakrishnan's Squad");
-  assert.equal(initialSquad.ownerEmail, 'gokul@gmail.com');
-  assert.equal(initialSquad.members[0].name, 'Gokulakrishnan');
-  assert.equal(initialSquad.members[0].email, 'gokul@gmail.com');
-  assert.equal(initialSquad.members[0].isOwner, true);
+  const teams = [];
+  const userTeams = getUserTeams(teams, realUser);
+  assert.equal(userTeams.length, 0);
 });
 
 test('Team Data: normalizeTeamCode strips symbols, spaces, and uppercases', () => {
@@ -257,6 +251,76 @@ test('Team Data: findTeamByCode matches with hyphen, without hyphen, spaces, and
   assert.equal(findTeamByCode(sampleTeams, 'product core')?.id, 't_2');
   // Non-existent
   assert.equal(findTeamByCode(sampleTeams, 'NONEXISTENT'), null);
+});
+
+test('Team Data: isTeamAuthor identifies the team creator/author correctly', () => {
+  const authorUser = { name: 'Gokula Krishnan', email: 'gokula@clayfin.com', sub: 'author_123' };
+  const memberUser = { name: 'Alex Colleague', email: 'alex@company.com', sub: 'member_456' };
+
+  const team = {
+    id: 'team_pfm',
+    name: 'pfm',
+    ownerEmail: 'gokula@clayfin.com',
+    members: [
+      { id: 'm_1', name: 'Gokula Krishnan', email: 'gokula@clayfin.com', isOwner: true },
+      { id: 'm_2', name: 'Alex Colleague', email: 'alex@company.com' },
+    ],
+  };
+
+  // Author check returns true for authorUser
+  assert.equal(isTeamAuthor(team, authorUser), true);
+
+  // Author check returns false for regular member
+  assert.equal(isTeamAuthor(team, memberUser), false);
+
+  // Author check returns false for null/undefined
+  assert.equal(isTeamAuthor(null, authorUser), false);
+  assert.equal(isTeamAuthor(team, null), false);
+});
+
+test('Team Data: once a member exits a team, they are permanently removed and never re-join after reload', () => {
+  const exitingUser = {
+    name: 'Gokulakrishnan B',
+    email: 'gokulakrishnan.developer18@gmail.com',
+    sub: '114014575240896018072',
+  };
+
+  const team = {
+    id: 'team_pfm',
+    name: 'pfm',
+    ownerEmail: 'gokulakrishnan.b@clayfin.com',
+    members: [
+      {
+        id: 'm_1',
+        name: 'Gokula Krishnan',
+        email: 'gokulakrishnan.b@clayfin.com',
+        isOwner: true,
+      },
+      {
+        id: 'm_2',
+        name: 'Gokulakrishnan B',
+        email: 'gokulakrishnan.developer18@gmail.com',
+        googleId: '114014575240896018072',
+      },
+    ],
+  };
+
+  // Initially in team
+  assert.equal(isUserInTeam(team, exitingUser), true);
+  assert.equal(getUserTeams([team], exitingUser).length, 1);
+
+  // User exits: removed from team.members
+  const remainingMembers = team.members.filter(
+    (m) => m.email.toLowerCase() !== exitingUser.email.toLowerCase()
+  );
+  const updatedTeam = { ...team, members: remainingMembers };
+
+  // After exit: isUserInTeam returns false
+  assert.equal(isUserInTeam(updatedTeam, exitingUser), false);
+
+  // After reload / refresh: getUserTeams returns 0 teams
+  const reloadedUserTeams = getUserTeams([updatedTeam], exitingUser);
+  assert.equal(reloadedUserTeams.length, 0);
 });
 
 
