@@ -323,6 +323,22 @@ test('Team Data: once a member exits a team, they are permanently removed and ne
   assert.equal(reloadedUserTeams.length, 0);
 });
 
+test('Team Data Persistence: loadTeams preserves local teams and does not wipe them on refresh', async () => {
+  const { loadTeams, saveTeams } = await import('../src/utils/teamData.js');
+  const sampleTeam = {
+    id: 'team_persist_1',
+    name: 'Persistent Team',
+    code: 'PER-1001',
+    members: [{ id: 'm1', name: 'Tester', email: 'tester@example.com' }],
+  };
+
+  await saveTeams([sampleTeam]);
+  const loaded = await loadTeams();
+
+  assert.ok(Array.isArray(loaded));
+  assert.ok(loaded.some((t) => t.id === 'team_persist_1'));
+});
+
 
 
 

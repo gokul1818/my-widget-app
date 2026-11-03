@@ -185,20 +185,26 @@ export function EditMemberModal({
               🏷️ Assigned Roles ({roles.length}) <span className="required">*</span>
             </label>
             <div className="assigned-roles-tray">
-              {roles.map((r) => (
-                <span key={r} className="assigned-role-chip">
-                  <span className="assigned-role-text">{r}</span>
-                  <button
-                    type="button"
-                    className="btn-remove-role-chip"
-                    onClick={() => handleRemoveRole(r)}
-                    title={`Remove ${r}`}
-                    aria-label={`Remove ${r}`}
-                  >
-                    ✕
-                  </button>
+              {roles.length === 0 ? (
+                <span className="assigned-roles-empty">
+                  No roles selected yet. Tap common roles below or add a custom role.
                 </span>
-              ))}
+              ) : (
+                roles.map((r) => (
+                  <span key={r} className="assigned-role-chip">
+                    <span className="assigned-role-text">{r}</span>
+                    <button
+                      type="button"
+                      className="btn-remove-role-chip"
+                      onClick={() => handleRemoveRole(r)}
+                      title={`Remove ${r}`}
+                      aria-label={`Remove ${r}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))
+              )}
             </div>
           </div>
 

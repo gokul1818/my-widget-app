@@ -25,7 +25,7 @@ const persistConfig = {
   key: 'office_roster_root',
   version: 1,
   storage,
-  whitelist: ['auth'], // Persist authentication; teams are synchronized dynamically from server/storage per user
+  whitelist: ['auth', 'teams'], // Persist both authentication and teams across refreshes
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -39,6 +39,23 @@ export const store = configureStore({
       },
     }),
   devTools: process.env.NODE_ENV !== 'production',
+});
+
+// Synchronous mirror to localStorage for instant pre-hydration and native widget sync
+store.subscribe(() => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const state = store.getState();
+    if (state.teams?.teams && state.teams.teams.length > 0) {
+      window.localStorage.setItem('office_teams_list', JSON.stringify(state.teams.teams));
+    }
+    if (state.teams?.activeTeamId) {
+      window.localStorage.setItem('office_active_team_id', state.teams.activeTeamId);
+    }
+    if (state.auth?.user) {
+      window.localStorage.setItem('google_auth_user', JSON.stringify(state.auth.user));
+    }
+  } catch {}
 });
 
 export const persistor = persistStore(store);

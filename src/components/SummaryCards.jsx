@@ -20,11 +20,11 @@ export function SummaryCards({ members, activeFilter, onFilterChange }) {
         >
           <div className="summary-card-header">
             <span className="summary-badge badge-office">🏢 In Office</span>
-            <span className="summary-percent">{officePercent}%</span>
+            <span className="summary-percent-pill">{officePercent}%</span>
           </div>
           <div className="summary-card-body">
             <span className="summary-count text-office">{officeCount}</span>
-            <span className="summary-label">Members</span>
+            <span className="summary-label">checked in</span>
           </div>
           <div className="summary-hint">
             {activeFilter === 'office' ? 'Filtered ✓' : 'Tap to filter'}
@@ -43,7 +43,7 @@ export function SummaryCards({ members, activeFilter, onFilterChange }) {
           </div>
           <div className="summary-card-body">
             <span className="summary-count text-wfh">{wfhCount}</span>
-            <span className="summary-label">Members</span>
+            <span className="summary-label">remote</span>
           </div>
           <div className="summary-hint">
             {activeFilter === 'wfh' ? 'Filtered ✓' : 'Tap to filter'}
@@ -62,7 +62,7 @@ export function SummaryCards({ members, activeFilter, onFilterChange }) {
           </div>
           <div className="summary-card-body">
             <span className="summary-count text-leave">{leaveCount}</span>
-            <span className="summary-label">Members</span>
+            <span className="summary-label">away</span>
           </div>
           <div className="summary-hint">
             {activeFilter === 'leave' ? 'Filtered ✓' : 'Tap to filter'}
@@ -70,7 +70,7 @@ export function SummaryCards({ members, activeFilter, onFilterChange }) {
         </button>
       </div>
 
-      {/* Progress Bar of Attendance */}
+      {/* Unified Progress Bar & Team Attendance Balance */}
       <div className="progress-container">
         <div className="progress-track" title={`${officePercent}% of team in office`}>
           <div
@@ -87,16 +87,18 @@ export function SummaryCards({ members, activeFilter, onFilterChange }) {
           />
         </div>
         <div className="progress-legend">
-          <span className="legend-item">
-            <span className="legend-dot dot-office" /> {officeCount} Office
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot dot-wfh" /> {wfhCount} WFH
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot dot-leave" /> {leaveCount} Leave
-          </span>
-          <span className="legend-total">Total: {total}</span>
+          <div className="legend-items-group">
+            <span className="legend-item">
+              <span className="legend-dot dot-office" /> {officeCount} Office
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot dot-wfh" /> {wfhCount} WFH
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot dot-leave" /> {leaveCount} Leave
+            </span>
+          </div>
+          <span className="legend-total">Total: {total} {total === 1 ? 'member' : 'members'}</span>
         </div>
       </div>
     </section>

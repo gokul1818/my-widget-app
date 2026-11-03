@@ -1,8 +1,20 @@
 import { createSlice } from '@reduxjs/toolkit';
 
+const getInitialUser = () => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('google_auth_user');
+      if (saved) return JSON.parse(saved);
+    }
+  } catch {}
+  return null;
+};
+
+const savedUser = getInitialUser();
+
 const initialState = {
-  user: null,
-  isAuthenticated: false,
+  user: savedUser,
+  isAuthenticated: Boolean(savedUser),
   loading: false,
 };
 

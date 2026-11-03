@@ -3,7 +3,7 @@ import { createSlice } from '@reduxjs/toolkit';
 const initialState = {
   activeFilter: 'all', // 'all' | 'office' | 'wfh' | 'leave'
   searchQuery: '',
-  theme: 'dark',
+  theme: 'light',
   toastMessage: null,
   modals: {
     isAddModalOpen: false,
@@ -14,6 +14,7 @@ const initialState = {
     isJoinModalOpen: false,
     isTeamChoiceModalOpen: false,
     isEditMemberOpen: false,
+    isEmailNotifyModalOpen: false,
   },
   initialJoinCode: '',
 };

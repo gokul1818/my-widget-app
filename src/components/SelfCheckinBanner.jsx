@@ -12,10 +12,12 @@ export function SelfCheckinBanner({
     <div className="checkin-banner">
       <div className="checkin-header">
         <div className="checkin-title-group">
-          <span className="checkin-emoji">👋</span>
+          <span className="checkin-emoji" aria-hidden="true">👋</span>
           <div>
             <h2 className="checkin-title">Hi {myName}, are you coming to the office tomorrow?</h2>
-            <p className="checkin-date">Roster for {tomorrowDateStr}</p>
+            <p className="checkin-date">
+              <span>🗓️ Attendance for <strong>{tomorrowDateStr}</strong></span>
+            </p>
           </div>
         </div>
         <div className="checkin-status-row">
@@ -52,27 +54,39 @@ export function SelfCheckinBanner({
           type="button"
           className={`btn-checkin btn-checkin-office ${myStatus === 'office' ? 'selected' : ''}`}
           onClick={() => onSetMyStatus('office')}
+          aria-pressed={myStatus === 'office'}
         >
           <span className="btn-icon">🏢</span>
-          <span>I'm Coming In</span>
+          <div className="btn-checkin-text">
+            <span className="btn-checkin-main">I'm Coming In</span>
+            <span className="btn-checkin-sub">Office</span>
+          </div>
         </button>
 
         <button
           type="button"
           className={`btn-checkin btn-checkin-wfh ${myStatus === 'wfh' ? 'selected' : ''}`}
           onClick={() => onSetMyStatus('wfh')}
+          aria-pressed={myStatus === 'wfh'}
         >
           <span className="btn-icon">🏠</span>
-          <span>I'm WFH</span>
+          <div className="btn-checkin-text">
+            <span className="btn-checkin-main">I'm WFH</span>
+            <span className="btn-checkin-sub">Remote</span>
+          </div>
         </button>
 
         <button
           type="button"
           className={`btn-checkin btn-checkin-leave ${myStatus === 'leave' ? 'selected' : ''}`}
           onClick={() => onSetMyStatus('leave')}
+          aria-pressed={myStatus === 'leave'}
         >
           <span className="btn-icon">🌴</span>
-          <span>On Leave</span>
+          <div className="btn-checkin-text">
+            <span className="btn-checkin-main">On Leave</span>
+            <span className="btn-checkin-sub">Time Off</span>
+          </div>
         </button>
       </div>
     </div>

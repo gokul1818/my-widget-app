@@ -3,6 +3,35 @@ import { Preferences } from '@capacitor/preferences';
 const TEAMS_STORAGE_KEY = 'office_teams_list';
 const ACTIVE_TEAM_STORAGE_KEY = 'office_active_team_id';
 
+const memStorage = new Map();
+
+function getStorageItem(key) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(key);
+    }
+  } catch {}
+  return memStorage.get(key) || null;
+}
+
+function setStorageItem(key, value) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  } catch {}
+  memStorage.set(key, value);
+}
+
+function removeStorageItem(key) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+  memStorage.delete(key);
+}
+
 /**
  * Generates a clean human-readable team code, e.g. TEAM-4921
  */
@@ -54,10 +83,12 @@ export function isUserInTeam(team, user) {
   if (!team || !user || !Array.isArray(team.members)) return false;
   const userEmail = (user.email || '').toLowerCase().trim();
   const userId = user.sub || user.id;
+  const userName = (user.name || '').toLowerCase().trim();
 
   return team.members.some((m) => {
     if (m.googleId && userId && m.googleId === userId) return true;
     if (m.email && userEmail && m.email.toLowerCase().trim() === userEmail) return true;
+    if (m.name && userName && m.name.toLowerCase().trim() === userName) return true;
     return false;
   });
 }
@@ -95,70 +126,105 @@ export function getUserTeams(teams, user) {
 export const initialTeams = [];
 
 /**
- * Loads teams from Vercel DB API with local storage fallback
+ * Loads teams with reliable local-first persistence & server sync.
+ * Guarantees that refreshing the page never clears local teams even if server is offline/empty.
  */
 export async function loadTeams() {
-  // 1. Try Vercel DB Serverless API (/api/teams)
-  try {
-    const apiRes = await fetch('/api/teams');
-    if (apiRes.ok) {
-      const json = await apiRes.json();
-      if (json.connected && Array.isArray(json.teams)) {
-        return json.teams;
-      }
-    }
-  } catch {
-    // API not reachable locally, proceed to local storage
-  }
-
-  // 2. Try Local Persistent Storage
-  try {
-    const res = await Preferences.get({ key: TEAMS_STORAGE_KEY });
-    if (res && res.value) {
-      const parsed = JSON.parse(res.value);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch {
+  // 1. First retrieve local persistent storage (Preferences & direct storage)
+  let localTeams = [];
+  if (typeof window !== 'undefined') {
     try {
-      const fallback = localStorage.getItem(TEAMS_STORAGE_KEY);
-      if (fallback) return JSON.parse(fallback);
+      const res = await Preferences.get({ key: TEAMS_STORAGE_KEY });
+      if (res && res.value) {
+        const parsed = JSON.parse(res.value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localTeams = parsed;
+        }
+      }
     } catch {
       // ignore
     }
+  }
+
+  // Always check direct storage fallback if Preferences had no teams
+  if (localTeams.length === 0) {
+    try {
+      const fallback = getStorageItem(TEAMS_STORAGE_KEY);
+      if (fallback) {
+        const parsed = JSON.parse(fallback);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localTeams = parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Try Serverless API / Database (/api/teams) if running in browser
+  if (typeof window !== 'undefined') {
+    try {
+      const apiRes = await fetch('/api/teams');
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        if (json.connected && Array.isArray(json.teams) && json.teams.length > 0) {
+          // Server has authoritative non-empty teams: sync to local storage and return
+          try {
+            const str = JSON.stringify(json.teams);
+            Preferences.set({ key: TEAMS_STORAGE_KEY, value: str }).catch(() => {});
+            setStorageItem(TEAMS_STORAGE_KEY, str);
+          } catch {}
+          return json.teams;
+        }
+      }
+    } catch {
+      // API not reachable locally, use local storage
+    }
+  }
+
+  // 3. If server has 0 teams but local storage has teams, KEEP LOCAL TEAMS and populate server!
+  if (localTeams.length > 0) {
+    if (typeof window !== 'undefined') {
+      fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teams: localTeams }),
+      }).catch(() => {});
+    }
+    return localTeams;
   }
 
   return [];
 }
 
 /**
- * Saves teams to Vercel DB API and local storage
+ * Saves teams to local storage immediately, then syncs to Vercel DB API / dev server
  */
 export async function saveTeams(teams) {
   if (!Array.isArray(teams)) return;
-  // 1. Sync to serverless API / Dev server
-  try {
-    await fetch('/api/teams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teams }),
-    });
-  } catch {
-    // offline or local dev
-  }
 
-  // 2. Local persistence
+  // 1. Immediate local persistence (never fails)
   try {
     const str = JSON.stringify(teams);
-    await Preferences.set({ key: TEAMS_STORAGE_KEY, value: str });
-    try {
-      localStorage.setItem(TEAMS_STORAGE_KEY, str);
-    } catch {
-      // ignore
+    if (typeof window !== 'undefined') {
+      Preferences.set({ key: TEAMS_STORAGE_KEY, value: str }).catch(() => {});
     }
+    setStorageItem(TEAMS_STORAGE_KEY, str);
   } catch (err) {
-    console.warn('Error saving teams:', err);
+    console.warn('Error saving teams locally:', err);
+  }
+
+  // 2. Sync to serverless API / Dev server
+  if (typeof window !== 'undefined') {
+    try {
+      await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teams }),
+      });
+    } catch {
+      // offline or local dev
+    }
   }
 }
 
@@ -166,17 +232,23 @@ export async function saveTeams(teams) {
  * Loads active team ID
  */
 export async function loadActiveTeamId() {
-  try {
-    const res = await Preferences.get({ key: ACTIVE_TEAM_STORAGE_KEY });
-    if (res && res.value) return res.value;
-  } catch {
+  if (typeof window !== 'undefined') {
     try {
-      const fallback = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
-      if (fallback) return fallback;
+      const res = await Preferences.get({ key: ACTIVE_TEAM_STORAGE_KEY });
+      if (res && res.value) return res.value;
     } catch {
       // ignore
     }
   }
+
+  // Direct storage fallback
+  try {
+    const fallback = getStorageItem(ACTIVE_TEAM_STORAGE_KEY);
+    if (fallback) return fallback;
+  } catch {
+    // ignore
+  }
+
   return null;
 }
 
@@ -186,16 +258,16 @@ export async function loadActiveTeamId() {
 export async function saveActiveTeamId(id) {
   try {
     if (!id) {
-      await Preferences.remove({ key: ACTIVE_TEAM_STORAGE_KEY }).catch(() => {});
-      try {
-        localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-      } catch {}
+      if (typeof window !== 'undefined') {
+        Preferences.remove({ key: ACTIVE_TEAM_STORAGE_KEY }).catch(() => {});
+      }
+      removeStorageItem(ACTIVE_TEAM_STORAGE_KEY);
       return;
     }
-    await Preferences.set({ key: ACTIVE_TEAM_STORAGE_KEY, value: id });
-    try {
-      localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, id);
-    } catch {}
+    if (typeof window !== 'undefined') {
+      Preferences.set({ key: ACTIVE_TEAM_STORAGE_KEY, value: id }).catch(() => {});
+    }
+    setStorageItem(ACTIVE_TEAM_STORAGE_KEY, id);
   } catch (err) {
     console.warn('Error saving active team ID:', err);
   }

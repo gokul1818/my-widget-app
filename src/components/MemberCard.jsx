@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function MemberCard({ member, onEdit }) {
+export function MemberCard({ member }) {
   const getInitials = (fullName) => {
     if (!fullName) return '?';
     const parts = fullName.trim().split(' ');
@@ -25,6 +25,13 @@ export function MemberCard({ member, onEdit }) {
     rolesList = ['Team Member'];
   }
 
+  // Format desk clearly so it doesn't duplicate the status label
+  const deskDisplay = member.desk
+    ? member.desk.toLowerCase().startsWith('desk')
+      ? member.desk
+      : `Desk: ${member.desk}`
+    : null;
+
   return (
     <div className={`member-card status-${member.status}`}>
       <div className="member-main">
@@ -44,7 +51,7 @@ export function MemberCard({ member, onEdit }) {
           <div className="member-name-row">
             <h3 className="member-name">{member.name}</h3>
             {member.isOwner && <span className="member-author-tag">👑 Team Author</span>}
-            {member.desk && <span className="member-desk-tag">{member.desk}</span>}
+            {deskDisplay && <span className="member-desk-tag">📍 {deskDisplay}</span>}
           </div>
 
           {/* Member Position / Title */}

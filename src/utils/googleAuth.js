@@ -2,6 +2,35 @@ import { Preferences } from '@capacitor/preferences';
 
 const GOOGLE_USER_STORAGE_KEY = 'google_auth_user';
 
+const memStorage = new Map();
+
+function getStorageItem(key) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(key);
+    }
+  } catch {}
+  return memStorage.get(key) || null;
+}
+
+function setStorageItem(key, value) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  } catch {}
+  memStorage.set(key, value);
+}
+
+function removeStorageItem(key) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+  memStorage.delete(key);
+}
+
 /**
  * Decodes Google Identity Services JWT credential
  */
@@ -27,15 +56,10 @@ export function parseGoogleJwt(token) {
 export async function saveGoogleUser(user) {
   try {
     const str = JSON.stringify(user);
-    await Preferences.set({
-      key: GOOGLE_USER_STORAGE_KEY,
-      value: str,
-    });
-    try {
-      localStorage.setItem(GOOGLE_USER_STORAGE_KEY, str);
-    } catch {
-      // ignore
+    if (typeof window !== 'undefined') {
+      Preferences.set({ key: GOOGLE_USER_STORAGE_KEY, value: str }).catch(() => {});
     }
+    setStorageItem(GOOGLE_USER_STORAGE_KEY, str);
   } catch (err) {
     console.warn('Error saving Google user:', err);
   }
@@ -45,20 +69,27 @@ export async function saveGoogleUser(user) {
  * Loads saved Google user from persistent storage
  */
 export async function loadGoogleUser() {
-  try {
-    const res = await Preferences.get({ key: GOOGLE_USER_STORAGE_KEY });
-    if (res && res.value) {
-      return JSON.parse(res.value);
-    }
-  } catch {
-    // fallback
+  if (typeof window !== 'undefined') {
     try {
-      const fallback = localStorage.getItem(GOOGLE_USER_STORAGE_KEY);
-      if (fallback) return JSON.parse(fallback);
+      const res = await Preferences.get({ key: GOOGLE_USER_STORAGE_KEY });
+      if (res && res.value) {
+        return JSON.parse(res.value);
+      }
     } catch {
       // ignore
     }
   }
+
+  // Direct storage check
+  try {
+    const fallback = getStorageItem(GOOGLE_USER_STORAGE_KEY);
+    if (fallback) {
+      return JSON.parse(fallback);
+    }
+  } catch {
+    // ignore
+  }
+
   return null;
 }
 
@@ -67,12 +98,10 @@ export async function loadGoogleUser() {
  */
 export async function clearGoogleUser() {
   try {
-    await Preferences.remove({ key: GOOGLE_USER_STORAGE_KEY });
-    try {
-      localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
-    } catch {
-      // ignore
+    if (typeof window !== 'undefined') {
+      Preferences.remove({ key: GOOGLE_USER_STORAGE_KEY }).catch(() => {});
     }
+    removeStorageItem(GOOGLE_USER_STORAGE_KEY);
   } catch (err) {
     console.warn('Error clearing Google user:', err);
   }

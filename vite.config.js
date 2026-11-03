@@ -2,10 +2,14 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
+import dotenv from 'dotenv'
+import notifyHandler from './api/notify.js'
+
+dotenv.config()
 
 /**
- * Vite Dev Server API Plugin for /api/teams.
- * Ensures cross-browser and cross-session team synchronization in development.
+ * Vite Dev Server API Plugin for /api/teams and /api/notify.
+ * Ensures cross-browser and cross-session team synchronization and FCM push notifications in development.
  */
 function teamsDevApiPlugin() {
   const dbFile = path.resolve(process.cwd(), '.dev-teams-db.json');
@@ -35,6 +39,8 @@ function teamsDevApiPlugin() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = req.url?.split('?')[0];
+
+        // 1. Teams API Handler
         if (url === '/api/teams' || url === '/api/teams/') {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Access-Control-Allow-Origin', '*');
@@ -74,6 +80,51 @@ function teamsDevApiPlugin() {
             return;
           }
         }
+
+        // 2. Automated Email & Firebase Cloud Messaging (FCM) Push Notifications Handler
+        if (url === '/api/notify' || url === '/api/notify/') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 200;
+            res.end();
+            return;
+          }
+
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                req.body = body ? JSON.parse(body) : {};
+              } catch {
+                req.body = {};
+              }
+              res.status = function (code) {
+                this.statusCode = code;
+                return this;
+              };
+              res.json = function (data) {
+                this.setHeader('Content-Type', 'application/json');
+                this.end(JSON.stringify(data));
+                return this;
+              };
+              try {
+                await notifyHandler(req, res);
+              } catch (handlerErr) {
+                console.error('[Vite dev /api/notify error]:', handlerErr);
+                res.status(500).json({ error: handlerErr.message });
+              }
+            });
+            return;
+          }
+        }
+
         next();
       });
     },
@@ -82,4 +133,4 @@ function teamsDevApiPlugin() {
 
 export default defineConfig({
   plugins: [react(), teamsDevApiPlugin()],
-})
+});

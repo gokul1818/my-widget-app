@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   AddMemberModal,
   MemberCard,
@@ -16,6 +16,15 @@ import {
   TeamChoiceModal,
   EditMemberModal,
 } from './components';
+import {
+  notifyTeamStatusChange,
+} from './utils/notificationService';
+import {
+  listenForegroundMessages,
+  isPushSupported,
+  getSavedPushToken,
+  requestPushPermissionAndGetToken,
+} from './utils/firebasePush';
 import {
   getTomorrowDetails,
   formatRosterSummary,
@@ -64,6 +73,7 @@ import {
   leaveTeam,
   resetTeams,
   updateMemberProfile,
+  setMemberPushToken,
   selectAllTeams,
   selectActiveTeam,
   selectActiveTeamMembers,
@@ -134,15 +144,28 @@ export function App() {
           (t) => t.id !== 'team_1793250191038' && !t.name.includes("'s Squad")
         );
 
-        dispatch(setTeams(loadedTeams));
+        if (loadedTeams.length > 0) {
+          dispatch(setTeams(loadedTeams));
+        }
+
+        const effectiveTeams = loadedTeams.length > 0 ? loadedTeams : (teams || []);
 
         if (activeUser) {
-          const userTeams = getUserTeams(loadedTeams, activeUser);
+          const userTeams = getUserTeams(effectiveTeams, activeUser);
           if (userTeams.length > 0) {
             const savedActiveTeamId = await loadActiveTeamId();
             const validActive = userTeams.find((t) => t.id === savedActiveTeamId);
-            dispatch(setActiveTeamId(validActive ? validActive.id : userTeams[0].id));
+            const selectedTeamId = validActive ? validActive.id : userTeams[0].id;
+            dispatch(setActiveTeamId(selectedTeamId));
+            await saveActiveTeamId(selectedTeamId);
             dispatch(syncUserWithTeams(activeUser));
+          } else if (effectiveTeams.length > 0) {
+            const savedActiveTeamId = await loadActiveTeamId();
+            const validActive = effectiveTeams.find((t) => t.id === savedActiveTeamId) || effectiveTeams[0];
+            if (validActive) {
+              dispatch(setActiveTeamId(validActive.id));
+              await saveActiveTeamId(validActive.id);
+            }
           } else {
             // When user belongs to NO teams, DO NOT create a new team automatically!
             dispatch(setActiveTeamId(null));
@@ -175,29 +198,139 @@ export function App() {
     // CRITICAL: Never persist before initial storage sync finishes, to prevent wiping database with []
     if (!isInitializedRef.current || authLoading) return;
 
-    if (Array.isArray(teams)) {
+    if (Array.isArray(teams) && teams.length > 0) {
       saveTeams(teams);
     }
     if (activeTeam) {
       saveActiveTeamId(activeTeam.id);
       syncRosterToNative(activeTeam.members || [], tomorrow.shortDateStr);
-    } else {
-      saveActiveTeamId(null);
     }
   }, [teams, activeTeam, authLoading, tomorrow.shortDateStr]);
 
   // Toast trigger helper
-  const showToastMsg = (msg) => {
+  const showToastMsg = useCallback((msg) => {
     dispatch(showToast(msg));
     setTimeout(() => {
       dispatch(hideToast());
     }, 3200);
-  };
+  }, [dispatch]);
+
+  // Register FCM push token for current user across their teams
+  const handleRegisterPushToken = useCallback(
+    async (token, targetUser = googleUser) => {
+      const user = targetUser || googleUser;
+      if (!token) return;
+      if (user?.email) {
+        dispatch(setMemberPushToken({ userEmail: user.email, token }));
+      }
+      const userEmail = (user?.email || '').toLowerCase().trim();
+      const userId = user?.sub || user?.id;
+      const userName = (user?.name || '').toLowerCase().trim();
+
+      const updatedTeams = (teams || []).map((t) => {
+        const isMember = (t.members || []).some(
+          (m) =>
+            (m.email && userEmail && m.email.toLowerCase().trim() === userEmail) ||
+            (m.googleId && userId && m.googleId === userId) ||
+            (m.name && userName && m.name.toLowerCase().trim() === userName)
+        );
+        if (!isMember) {
+          const isOwner = t.ownerEmail && userEmail && t.ownerEmail.toLowerCase().trim() === userEmail;
+          if (!isOwner) return t;
+        }
+        return {
+          ...t,
+          members: (t.members || []).map((m) => {
+            const match =
+              (m.email && userEmail && m.email.toLowerCase().trim() === userEmail) ||
+              (m.googleId && userId && m.googleId === userId) ||
+              (m.name && userName && m.name.toLowerCase().trim() === userName) ||
+              (m.isOwner && t.ownerEmail && userEmail && t.ownerEmail.toLowerCase().trim() === userEmail);
+            if (match) {
+              return { ...m, fcmToken: token };
+            }
+            return m;
+          }),
+        };
+      });
+      await saveTeams(updatedTeams);
+    },
+    [googleUser, teams, dispatch]
+  );
+
+  // Automatically ask browser for notification permission when application opens
+  const autoInitPushNotifications = useCallback(
+    async (targetUser = googleUser) => {
+      if (!isPushSupported()) return;
+
+      // Do not re-prompt if user explicitly denied/blocked notifications in browser settings
+      if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+        return;
+      }
+
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          let token = getSavedPushToken();
+          if (!token) {
+            const res = await requestPushPermissionAndGetToken();
+            token = res?.token;
+          }
+          if (token && targetUser) {
+            handleRegisterPushToken(token, targetUser);
+          }
+          return;
+        }
+
+        // When application opens and permission is 'default', directly trigger the browser permission prompt
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          const res = await requestPushPermissionAndGetToken();
+          if (res?.permission === 'granted' && res?.token) {
+            showToastMsg('🔔 Push notifications enabled!');
+            if (targetUser) {
+              handleRegisterPushToken(res.token, targetUser);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Auto push initialization error:', err);
+      }
+    },
+    [googleUser, handleRegisterPushToken, showToastMsg]
+  );
+
+  // Firebase foreground push notification listener & auto-ask permission on application open
+  useEffect(() => {
+    const unsubscribe = listenForegroundMessages((payload) => {
+      showToastMsg(`🔔 ${payload.title}: ${payload.body}`);
+    });
+
+    // 1. Ask directly when opening the application
+    autoInitPushNotifications(googleUser);
+
+    // 2. Also register a one-time gesture trigger in case the browser requires user interaction
+    const handleFirstGesture = () => {
+      if (isPushSupported() && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        autoInitPushNotifications(googleUser);
+      }
+    };
+
+    window.addEventListener('click', handleFirstGesture, { once: true, passive: true });
+    window.addEventListener('touchstart', handleFirstGesture, { once: true, passive: true });
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('click', handleFirstGesture);
+      window.removeEventListener('touchstart', handleFirstGesture);
+    };
+  }, [googleUser, autoInitPushNotifications, showToastMsg]);
 
   // Google Sign In Handler
   const handleGoogleSignIn = async (profile) => {
     dispatch(setUser(profile));
     await saveGoogleUser(profile);
+
+    // Automatically initialize/register push notifications upon sign-in
+    autoInitPushNotifications(profile);
 
     // Refresh authoritative teams from server
     let loadedTeams = await loadTeams();
@@ -423,9 +556,34 @@ export function App() {
   };
 
   // Roster: Update Status for a member
-  const handleStatusChange = (id, newStatus) => {
+  const handleStatusChange = async (id, newStatus) => {
     if (!activeTeam) return;
+    const target = members.find((m) => m.id === id);
+    const oldStatus = target?.status;
     dispatch(updateMemberStatus({ teamId: activeTeam.id, memberId: id, status: newStatus }));
+
+    if (target && oldStatus !== newStatus) {
+      try {
+        const sender = target.email ? target : (googleUser || target);
+        const notifyRes = await notifyTeamStatusChange({
+          team: activeTeam,
+          user: sender,
+          newStatus,
+          oldStatus,
+          dateStr: tomorrow.fullDateStr,
+          triggerLocalPreview: true,
+        });
+        const label = newStatus === 'office' ? 'Office 🏢' : newStatus === 'wfh' ? 'WFH 🏠' : 'Leave 🌴';
+        if (notifyRes && (notifyRes.count > 0 || notifyRes.pushCount > 0)) {
+          const alerts = [];
+          if (notifyRes.count > 0) alerts.push(`📧 ${notifyRes.count} email`);
+          if (notifyRes.pushCount > 0) alerts.push(`🔔 ${notifyRes.pushCount} push`);
+          showToastMsg(`Updated ${target.name} to ${label} • Intimated ${alerts.join(' + ')}`);
+        }
+      } catch (err) {
+        console.warn('Member status notification error:', err);
+      }
+    }
   };
 
   // Roster: Delete Member from Active Team
@@ -440,11 +598,34 @@ export function App() {
     }
   };
 
-  // Roster: Self Check-in Status
-  const handleSetMyStatus = (status) => {
+  // Roster: Self Check-in Status & Intimate Colleagues via Email & Firebase Push
+  const handleSetMyStatus = async (status) => {
     if (!activeTeam) return;
+    const oldStatus = myMember?.status || 'office';
     dispatch(setSelfStatus({ teamId: activeTeam.id, status, user: googleUser }));
     const label = status === 'office' ? 'Office 🏢' : status === 'wfh' ? 'WFH 🏠' : 'Leave 🌴';
+
+    if (googleUser && oldStatus !== status) {
+      try {
+        const notifyRes = await notifyTeamStatusChange({
+          team: activeTeam,
+          user: googleUser,
+          newStatus: status,
+          oldStatus,
+          dateStr: tomorrow.fullDateStr,
+          triggerLocalPreview: true,
+        });
+        if (notifyRes && (notifyRes.count > 0 || notifyRes.pushCount > 0)) {
+          const alerts = [];
+          if (notifyRes.count > 0) alerts.push(`📧 ${notifyRes.count} ${notifyRes.count === 1 ? 'colleague' : 'colleagues'}`);
+          if (notifyRes.pushCount > 0) alerts.push(`🔔 ${notifyRes.pushCount} push`);
+          showToastMsg(`Your status updated to ${label} • Intimated ${alerts.join(' + ')}`);
+          return;
+        }
+      } catch (err) {
+        console.warn('Status change notification error:', err);
+      }
+    }
     showToastMsg(`Your status updated to ${label}`);
   };
 
@@ -556,7 +737,7 @@ export function App() {
   // 1. Loading splash screen while checking persistent auth
   if (authLoading) {
     return (
-      <div className={`app-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
+      <div className="app-container theme-light">
         <div className="auth-loading-screen">
           <div className="auth-loading-spinner" />
           <p className="auth-loading-text">Loading Office Roster...</p>
@@ -568,7 +749,7 @@ export function App() {
   // 2. Authentication Gate: Must login with Gmail first to access everything
   if (!googleUser) {
     return (
-      <div className={`app-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
+      <div className="app-container theme-light">
         {toastMessage && (
           <div className="toast-notification" role="status" aria-live="polite">
             {toastMessage}
@@ -580,7 +761,7 @@ export function App() {
   }
 
   return (
-    <div className={`app-container ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`}>
+    <div className="app-container theme-light">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="toast-notification" role="status" aria-live="polite">
@@ -706,7 +887,6 @@ export function App() {
               onSetMyStatus={handleSetMyStatus}
               tomorrowDateStr={tomorrow.shortDateStr}
               onOpenCalendar={() => dispatch(setModalOpen({ modalName: 'isCalendarModalOpen', isOpen: true }))}
-              onEditProfile={() => handleOpenMyProfileEdit(myMember)}
             />
 
             {/* Attendance Summary KPIs for Active Team */}
@@ -722,28 +902,41 @@ export function App() {
               tomorrowDateStr={tomorrow.shortDateStr}
             />
 
-            {/* Controls Toolbar: Search, Filters, and Bulk Actions */}
+            {/* Controls Toolbar: Search, Filters, and Copy Action */}
             <section className="toolbar-section">
-              <div className="search-box">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="search"
-                  className="search-input"
-                  placeholder={`Search in ${activeTeam?.name || 'team'}...`}
-                  value={searchQuery}
-                  onChange={(e) => dispatch(setSearchQuery(e.target.value))}
-                  aria-label="Search members"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    className="btn-clear-search"
-                    onClick={() => dispatch(setSearchQuery(''))}
-                    aria-label="Clear search"
-                  >
-                    ✕
-                  </button>
-                )}
+              <div className="toolbar-top-row">
+                <div className="search-box">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    type="search"
+                    className="search-input"
+                    placeholder={`Search members in ${activeTeam?.name || 'team'}...`}
+                    value={searchQuery}
+                    onChange={(e) => dispatch(setSearchQuery(e.target.value))}
+                    aria-label="Search members"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="btn-clear-search"
+                      onClick={() => dispatch(setSearchQuery(''))}
+                      aria-label="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-copy-roster"
+                  onClick={handleCopySummary}
+                  title="Copy attendance roster formatted for Slack or WhatsApp"
+                  aria-label="Copy attendance roster"
+                >
+                  <span className="copy-icon">📋</span>
+                  <span className="copy-text">Copy Roster</span>
+                </button>
               </div>
 
               <div className="filter-pill-row">
@@ -774,16 +967,6 @@ export function App() {
                   onClick={() => dispatch(setActiveFilter('leave'))}
                 >
                   🌴 Leave ({members.filter((m) => m.status === 'leave').length})
-                </button>
-              </div>
-
-              <div className="bulk-actions-row">
-                <button
-                  type="button"
-                  className="btn-link-action"
-                  onClick={handleCopySummary}
-                >
-                  📋 Copy Roster for Slack/WhatsApp
                 </button>
               </div>
             </section>

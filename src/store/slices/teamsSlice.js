@@ -2,9 +2,31 @@ import { createSlice } from '@reduxjs/toolkit';
 import { createNewTeam } from '../../utils/teamData.js';
 import { createOrUpdateMemberFromGoogle } from '../../utils/googleAuth.js';
 
+const getInitialTeams = () => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('office_teams_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+};
+
+const getInitialActiveTeamId = () => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('office_active_team_id') || null;
+    }
+  } catch {}
+  return null;
+};
+
 const initialState = {
-  teams: [],
-  activeTeamId: null,
+  teams: getInitialTeams(),
+  activeTeamId: getInitialActiveTeamId(),
 };
 
 export const teamsSlice = createSlice({
@@ -121,8 +143,23 @@ export const teamsSlice = createSlice({
           }
           if (updates.dept !== undefined) member.dept = updates.dept;
           if (updates.desk !== undefined) member.desk = updates.desk.trim();
+          if (updates.fcmToken !== undefined) member.fcmToken = updates.fcmToken;
         }
       }
+    },
+    setMemberPushToken: (state, action) => {
+      const { userEmail, token } = action.payload;
+      if (!userEmail) return;
+      const cleanEmail = userEmail.toLowerCase().trim();
+      state.teams.forEach((team) => {
+        if (Array.isArray(team.members)) {
+          team.members.forEach((m) => {
+            if (m.email && m.email.toLowerCase().trim() === cleanEmail) {
+              m.fcmToken = token;
+            }
+          });
+        }
+      });
     },
     resetTeams: (state) => {
       state.teams = [];
@@ -306,6 +343,7 @@ export const {
   leaveTeam,
   resetTeams,
   updateMemberProfile,
+  setMemberPushToken,
 } = teamsSlice.actions;
 
 export const selectAllTeams = (state) => state.teams.teams;
