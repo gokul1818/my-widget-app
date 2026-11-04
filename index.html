@@ -16,6 +16,145 @@
     <!-- Android Chrome PWA Support -->
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Office Team Roster • Who's Coming Tomorrow</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+            },
+            colors: {
+              navy: {
+                DEFAULT: '#1c417a',
+                mid: '#2a5aa3',
+                deep: '#0e2447',
+              },
+              clayblue: {
+                DEFAULT: '#249ed6',
+                deep: '#1b76a0',
+              },
+              claygreen: {
+                DEFAULT: '#17974f',
+                deep: '#148043',
+              },
+              clayamber: {
+                DEFAULT: '#f5a922',
+                deep: '#936514',
+              },
+              clayed: {
+                DEFAULT: '#de262c',
+              },
+              clayplum: {
+                DEFAULT: '#513b6a',
+                mid: '#6b4f8f',
+              },
+              clayorange: {
+                DEFAULT: '#e5542b',
+                deep: '#c34725',
+              },
+              page: '#f4f6fb',
+              surface: '#ffffff',
+              ink: '#12264a',
+              muted: '#5b6b8a',
+              faint: '#9aa7bd',
+              border: '#e3e8f2',
+              track: '#eaeef6',
+              deep: '#0e2447',
+              brand: {
+                50: '#ecf7f1',
+                100: '#d5eee0',
+                500: '#17974f',
+                600: '#148043',
+                700: '#1c417a',
+              },
+              emerald: {
+                50: '#ecf7f1',
+                100: '#d5eee0',
+                200: '#aeddc2',
+                300: '#75c49a',
+                400: '#41ab73',
+                500: '#17974f',
+                600: '#148043',
+                700: '#106635',
+                800: '#0d512a',
+                900: '#093c1f',
+                950: '#052714',
+              },
+              sky: {
+                50: '#f0f8fc',
+                100: '#dcf0f9',
+                200: '#bfe2f4',
+                300: '#87caea',
+                400: '#4db5e3',
+                500: '#249ed6',
+                600: '#1b76a0',
+                700: '#166285',
+                800: '#114d68',
+                900: '#0c384c',
+              },
+              amber: {
+                50: '#fef7ec',
+                100: '#fdedd0',
+                200: '#fcdba6',
+                300: '#fac470',
+                400: '#f7b441',
+                500: '#f5a922',
+                600: '#d99216',
+                700: '#936514',
+                800: '#755010',
+                900: '#573b0c',
+              },
+              rose: {
+                50: '#fdf3f3',
+                100: '#fce4e5',
+                200: '#f9cbcd',
+                500: '#de262c',
+                600: '#c62026',
+                700: '#ad1c21',
+              },
+              slate: {
+                50: '#f4f6fb',
+                100: '#eaeef6',
+                200: '#e3e8f2',
+                300: '#cdd6e4',
+                400: '#9aa7bd',
+                500: '#5b6b8a',
+                600: '#3f5070',
+                700: '#283a59',
+                800: '#1c2d47',
+                900: '#12264a',
+              }
+            },
+            boxShadow: {
+              'soft': '0 1px 2px rgba(18, 38, 74, 0.05), 0 10px 24px rgba(18, 38, 74, 0.07)',
+              'card': '0 1px 2px rgba(18, 38, 74, 0.05), 0 10px 24px rgba(18, 38, 74, 0.07)',
+              'lift': '0 2px 4px rgba(18, 38, 74, 0.06), 0 16px 32px rgba(18, 38, 74, 0.12)',
+              'glow-emerald': '0 6px 14px rgba(23, 151, 79, 0.3)',
+            }
+          }
+        }
+      }
+    </script>
+    <style data-purpose="custom-mobile-tweaks">
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      body {
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 16px);
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
     <!-- Google Identity Services (Sign in with Google) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>

@@ -15,6 +15,7 @@ import {
   LoginScreen,
   TeamChoiceModal,
   EditMemberModal,
+  EmailNotificationModal,
 } from './components';
 import {
   notifyTeamStatusChange,
@@ -761,107 +762,153 @@ export function App() {
   }
 
   return (
-    <div className="app-container theme-light">
+    <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 pb-24 px-4 sm:px-5 selection:bg-emerald-100 selection:text-emerald-800">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="toast-notification" role="status" aria-live="polite">
+        <div
+          className="fixed top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-full shadow-lg border border-slate-700 animate-fade-in"
+          role="status"
+          aria-live="polite"
+        >
           {toastMessage}
         </div>
       )}
 
-      {/* Main Top Header */}
-      <header className="app-header">
-        <div className="app-header-inner">
-          <div className="brand-group">
-            <span className="brand-badge">OFFICE</span>
-            <div>
-              <h1 className="brand-title">Who's In Tomorrow?</h1>
-              <p className="brand-subtitle">
-                <span>🗓️ {tomorrow.fullDateStr}</span>
-              </p>
-            </div>
+      {/* BEGIN: TopBar */}
+      <header className="pt-3 pb-4 border-b border-slate-200/70 relative" data-purpose="top-navigation">
+        {/* Clayfin Signature Mosaic Strip on Header */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-[2.5px]"
+          style={{ background: 'var(--mosaic, linear-gradient(90deg, #1c417a 0 14.28%, #249ed6 14.28% 28.56%, #17974f 28.56% 42.84%, #f5a922 42.84% 57.12%, #e5542b 57.12% 71.4%, #de262c 71.4% 85.68%, #e01c62 85.68%))' }}
+          aria-hidden="true"
+        />
+
+        {/* Upper Status Row: App Badge & User Profile */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            {/* Team Selector Dropdown */}
+            <TeamHeaderDropdown
+              activeTeam={activeTeam}
+              allTeams={userTeams}
+              onSelectTeam={handleSelectTeam}
+              onOpenCreateModal={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: true }))}
+              onOpenJoinModal={() => dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }))}
+              onOpenInviteModal={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: true }))}
+              onOpenChoiceModal={() => dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: true }))}
+              onExitTeam={handleExitTeam}
+            />
           </div>
 
-          {/* Active Team Selector Dropdown */}
-          <TeamHeaderDropdown
-            activeTeam={activeTeam}
-            allTeams={userTeams}
-            onSelectTeam={handleSelectTeam}
-            onOpenCreateModal={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: true }))}
-            onOpenJoinModal={() => dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }))}
-            onOpenInviteModal={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: true }))}
-            onOpenChoiceModal={() => dispatch(setModalOpen({ modalName: 'isTeamChoiceModalOpen', isOpen: true }))}
-            onExitTeam={handleExitTeam}
-          />
+          {/* User Profile Pill & Bell */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs text-slate-600 hover:text-amber-600 hover:border-amber-300 shadow-sm active:scale-95 transition-all cursor-pointer"
+              onClick={() => dispatch(setModalOpen({ modalName: 'isEmailNotifyModalOpen', isOpen: true }))}
+              title="Team Attendance Alerts & Push Notifications"
+            >
+              🔔
+            </button>
 
-          <div className="header-actions">
-            {/* Google Account Profile & Sign Out Button */}
-            <div className="header-account-pill">
-              <button
-                type="button"
-                className="btn-header-profile"
-                onClick={() => dispatch(setModalOpen({ modalName: 'isGoogleModalOpen', isOpen: true }))}
-                title={`Signed in as ${googleUser.name} (${googleUser.email}). Click to view details.`}
-                aria-label="Google account settings"
-              >
-                {googleUser.picture ? (
-                  <img src={googleUser.picture} alt={googleUser.name} className="header-user-img" />
-                ) : (
-                  <span className="header-user-avatar-initials">
-                    {googleUser.initials || googleUser.name.charAt(0).toUpperCase()}
-                  </span>
-                )}
-                <div className="header-user-meta">
-                  <span className="header-user-name">{googleUser.name}</span>
-                  <span className="header-user-email">{googleUser.email}</span>
+            <button
+              type="button"
+              className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-white border border-slate-200/80 rounded-full shadow-sm hover:border-slate-300 transition-colors active:scale-95 cursor-pointer"
+              data-purpose="profile-trigger"
+              onClick={() => dispatch(setModalOpen({ modalName: 'isGoogleModalOpen', isOpen: true }))}
+              title={`Signed in as ${googleUser.name} (${googleUser.email}). Tap to view profile.`}
+            >
+              {googleUser.picture ? (
+                <img
+                  src={googleUser.picture}
+                  alt={googleUser.name}
+                  className="w-6 h-6 rounded-full object-cover ring-2 ring-emerald-100"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-navy text-white text-[11px] font-bold flex items-center justify-center ring-2 ring-sky-200">
+                  {googleUser.initials || googleUser.name?.charAt(0).toUpperCase() || 'U'}
                 </div>
-              </button>
-              {activeTeam && myMember && (
-                <button
-                  type="button"
-                  className="btn-header-edit-profile"
-                  onClick={() => handleOpenMyProfileEdit(myMember)}
-                  title="Edit your position and roles"
-                  aria-label="Edit Profile"
-                >
-                  <span className="edit-icon">✏️</span>
-                  <span>Edit Profile</span>
-                </button>
               )}
-              <button
-                type="button"
-                className="btn-header-signout"
-                onClick={handleGoogleSignOut}
-                title="Sign Out of Gmail"
-                aria-label="Sign Out of Gmail"
-              >
-                Sign Out
-              </button>
-            </div>
+              <span className="text-xs font-semibold text-slate-700 max-w-[85px] truncate">
+                {googleUser.name?.split(' ')[0] || 'Profile'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* App Title & Date Selector Row */}
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">
+              Who's In Tomorrow?
+            </h1>
+            <button
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors mt-0.5 cursor-pointer"
+              data-purpose="date-selector"
+              type="button"
+              onClick={() => dispatch(setModalOpen({ modalName: 'isCalendarModalOpen', isOpen: true }))}
+            >
+              <span>📅</span>
+              <span className="font-semibold text-slate-800">{tomorrow.fullDateStr}</span>
+              <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium border border-slate-200/60">
+                Tomorrow
+              </span>
+            </button>
+          </div>
+
+          {/* Live status indicator mini badge */}
+          <div className="text-right">
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                (myMember?.status || 'office') === 'office'
+                  ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                  : (myMember?.status || 'office') === 'wfh'
+                  ? 'text-sky-700 bg-sky-50 border border-sky-200'
+                  : 'text-amber-700 bg-amber-50 border border-amber-200'
+              }`}
+            >
+              <span>
+                {(myMember?.status || 'office') === 'office'
+                  ? '🏢'
+                  : (myMember?.status || 'office') === 'wfh'
+                  ? '🏠'
+                  : '🌴'}
+              </span>
+              <span>
+                Your status:{' '}
+                {(myMember?.status || 'office') === 'office'
+                  ? 'Office'
+                  : (myMember?.status || 'office') === 'wfh'
+                  ? 'WFH'
+                  : 'Leave'}
+              </span>
+            </span>
           </div>
         </div>
       </header>
+      {/* END: TopBar */}
 
-      {/* Main Content Area */}
-      <main className="app-main">
+      {/* BEGIN: MainContent */}
+      <main className="space-y-4 pt-4 flex-1">
         {!activeTeam ? (
-          <div className="empty-state-card no-teams-welcome">
-            <span className="empty-state-emoji">🏢</span>
-            <h2 className="empty-state-title">Welcome to Office Team Roster, {googleUser?.name?.split(' ')[0] || ''}!</h2>
-            <p className="empty-state-text">
+          <div className="bg-white rounded-2xl p-6 text-center border border-slate-200 shadow-soft">
+            <span className="text-4xl block mb-2">🏢</span>
+            <h2 className="text-base font-bold text-slate-900">
+              Welcome to Office Team Roster, {googleUser?.name?.split(' ')[0] || ''}!
+            </h2>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
               Track who is coming to the office tomorrow. Get started by joining your colleagues' team with a Team Code or creating a new team!
             </p>
-            <div className="empty-state-actions">
+            <div className="flex gap-2 justify-center">
               <button
                 type="button"
-                className="btn-primary"
+                className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-full hover:bg-emerald-700 shadow-sm cursor-pointer"
                 onClick={() => dispatch(setModalOpen({ modalName: 'isCreateTeamOpen', isOpen: true }))}
               >
                 ➕ Create a Team
               </button>
               <button
                 type="button"
-                className="btn-secondary"
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 shadow-sm cursor-pointer"
                 onClick={() => dispatch(setModalOpen({ modalName: 'isJoinModalOpen', isOpen: true }))}
               >
                 🤝 Join with Code
@@ -887,6 +934,7 @@ export function App() {
               onSetMyStatus={handleSetMyStatus}
               tomorrowDateStr={tomorrow.shortDateStr}
               onOpenCalendar={() => dispatch(setModalOpen({ modalName: 'isCalendarModalOpen', isOpen: true }))}
+              onEditProfile={() => myMember && handleOpenMyProfileEdit(myMember)}
             />
 
             {/* Attendance Summary KPIs for Active Team */}
@@ -902,23 +950,64 @@ export function App() {
               tomorrowDateStr={tomorrow.shortDateStr}
             />
 
-            {/* Controls Toolbar: Search, Filters, and Copy Action */}
-            <section className="toolbar-section">
-              <div className="toolbar-top-row">
-                <div className="search-box">
-                  <span className="search-icon">🔍</span>
+            {/* Team Roster Section: Search, Filters, and Members List */}
+            <section className="space-y-3" data-purpose="team-roster-section">
+              {/* Section Header with Meta & Exit */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-slate-900">{activeTeam.name}</h2>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-700">
+                      {filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
+                    <span>📍</span>
+                    <span>{activeTeam.location || 'Main Office, 4th Floor'}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/70 rounded-full hover:bg-emerald-100 transition-colors cursor-pointer"
+                    type="button"
+                    onClick={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: true }))}
+                    title="Invite colleagues to team"
+                  >
+                    <span>➕</span>
+                    <span>Invite</span>
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200/70 rounded-full hover:bg-rose-100 transition-colors cursor-pointer"
+                    data-purpose="exit-team-btn"
+                    type="button"
+                    onClick={handleExitTeam}
+                    title={`Exit ${activeTeam.name}`}
+                  >
+                    <span>🚪</span>
+                    <span>Exit Team</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Bar & Copy Roster Action */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">
+                    🔍
+                  </span>
                   <input
-                    type="search"
-                    className="search-input"
-                    placeholder={`Search members in ${activeTeam?.name || 'team'}...`}
+                    className="w-full pl-8 pr-7 py-2 text-xs bg-white border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 placeholder-slate-400 shadow-sm"
+                    data-purpose="roster-search-input"
+                    placeholder={`Search members in ${activeTeam.name}...`}
+                    type="text"
                     value={searchQuery}
                     onChange={(e) => dispatch(setSearchQuery(e.target.value))}
-                    aria-label="Search members"
                   />
                   {searchQuery && (
                     <button
                       type="button"
-                      className="btn-clear-search"
+                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
                       onClick={() => dispatch(setSearchQuery(''))}
                       aria-label="Clear search"
                     >
@@ -927,82 +1016,81 @@ export function App() {
                   )}
                 </div>
 
+                {/* Copy Roster Action */}
                 <button
+                  className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+                  data-purpose="copy-roster-btn"
                   type="button"
-                  className="btn-copy-roster"
                   onClick={handleCopySummary}
-                  title="Copy attendance roster formatted for Slack or WhatsApp"
-                  aria-label="Copy attendance roster"
                 >
-                  <span className="copy-icon">📋</span>
-                  <span className="copy-text">Copy Roster</span>
+                  <span>📋</span>
+                  <span>Copy</span>
                 </button>
               </div>
 
-              <div className="filter-pill-row">
+              {/* Filter Chips Carousel */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5" data-purpose="filter-chips">
                 <button
+                  className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm shrink-0 transition-all cursor-pointer ${
+                    activeFilter === 'all'
+                      ? 'bg-navy text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300'
+                  }`}
                   type="button"
-                  className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`}
                   onClick={() => dispatch(setActiveFilter('all'))}
                 >
                   All ({members.length})
                 </button>
                 <button
+                  className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm shrink-0 flex items-center gap-1 transition-all cursor-pointer ${
+                    activeFilter === 'office'
+                      ? 'bg-navy text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300'
+                  }`}
                   type="button"
-                  className={`filter-tab filter-office ${activeFilter === 'office' ? 'active' : ''}`}
                   onClick={() => dispatch(setActiveFilter('office'))}
                 >
-                  🏢 Office ({members.filter((m) => m.status === 'office').length})
+                  <span>🏢</span>
+                  <span>Office ({members.filter((m) => m.status === 'office').length})</span>
                 </button>
                 <button
+                  className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm shrink-0 flex items-center gap-1 transition-all cursor-pointer ${
+                    activeFilter === 'wfh'
+                      ? 'bg-navy text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300'
+                  }`}
                   type="button"
-                  className={`filter-tab filter-wfh ${activeFilter === 'wfh' ? 'active' : ''}`}
                   onClick={() => dispatch(setActiveFilter('wfh'))}
                 >
-                  🏠 WFH ({members.filter((m) => m.status === 'wfh').length})
+                  <span>🏠</span>
+                  <span>WFH ({members.filter((m) => m.status === 'wfh').length})</span>
                 </button>
                 <button
+                  className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm shrink-0 flex items-center gap-1 transition-all cursor-pointer ${
+                    activeFilter === 'leave'
+                      ? 'bg-navy text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300'
+                  }`}
                   type="button"
-                  className={`filter-tab filter-leave ${activeFilter === 'leave' ? 'active' : ''}`}
                   onClick={() => dispatch(setActiveFilter('leave'))}
                 >
-                  🌴 Leave ({members.filter((m) => m.status === 'leave').length})
+                  <span>🌴</span>
+                  <span>Leave ({members.filter((m) => m.status === 'leave').length})</span>
                 </button>
               </div>
-            </section>
 
-            {/* Team Members List */}
-            <section className="members-section" aria-label="Team members roster">
-              <div className="members-header">
-                <div>
-                  <h2 className="members-heading">
-                    {activeTeam?.name} ({filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'})
-                  </h2>
-                  <p className="members-subheading">📍 {activeTeam?.location}</p>
-                </div>
-                <div className="members-header-actions">
-                  <button
-                    type="button"
-                    className="btn-exit-team"
-                    onClick={handleExitTeam}
-                    title={`Exit ${activeTeam?.name}`}
-                  >
-                    🚪 Exit Team
-                  </button>
-                </div>
-              </div>
-
+              {/* Member Cards List */}
               {filteredMembers.length === 0 ? (
-                <div className="empty-state-card">
-                  <span className="empty-state-emoji">🔍</span>
-                  <h3 className="empty-state-title">No matching team members found</h3>
-                  <p className="empty-state-text">
+                <div className="bg-white rounded-2xl p-6 text-center border border-slate-200/80 shadow-soft">
+                  <span className="text-3xl block mb-2">🔍</span>
+                  <h3 className="text-sm font-bold text-slate-800">No matching team members found</h3>
+                  <p className="text-xs text-slate-500 mt-1">
                     Try adjusting your search query, or invite colleagues to join {activeTeam?.name}.
                   </p>
-                  <div className="empty-state-actions">
+                  <div className="flex gap-2 justify-center mt-3">
                     <button
                       type="button"
-                      className="btn-secondary"
+                      className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-full hover:bg-slate-50 cursor-pointer"
                       onClick={() => {
                         dispatch(setSearchQuery(''));
                         dispatch(setActiveFilter('all'));
@@ -1012,7 +1100,7 @@ export function App() {
                     </button>
                     <button
                       type="button"
-                      className="btn-primary"
+                      className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-full hover:bg-emerald-700 cursor-pointer"
                       onClick={() => dispatch(setModalOpen({ modalName: 'isInviteModalOpen', isOpen: true }))}
                     >
                       Invite Colleagues
@@ -1020,11 +1108,13 @@ export function App() {
                   </div>
                 </div>
               ) : (
-                <div className="members-grid">
+                <div className="space-y-2.5 pt-1" data-purpose="member-list">
                   {filteredMembers.map((member) => (
                     <MemberCard
                       key={member.id}
                       member={member}
+                      isSelf={member.id === myMember?.id}
+                      onEditProfile={handleOpenMyProfileEdit}
                     />
                   ))}
                 </div>
@@ -1033,6 +1123,62 @@ export function App() {
           </>
         )}
       </main>
+      {/* END: MainContent */}
+
+      {/* BEGIN: BottomNavigationDock */}
+      <nav
+        className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl px-4 py-2 shadow-xl flex items-center justify-around z-40"
+        data-purpose="mobile-tab-bar"
+      >
+        {/* Tab 1: Who's In (Active) */}
+        <button
+          className="flex flex-col items-center gap-0.5 text-navy font-bold cursor-pointer"
+          data-tab="presence"
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        >
+          <svg className="w-5 h-5 text-navy" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+          </svg>
+          <span className="text-[10px] text-navy font-bold">Tracker</span>
+        </button>
+
+        {/* Tab 2: Schedule */}
+        <button
+          className="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-700 font-medium cursor-pointer"
+          data-tab="calendar"
+          type="button"
+          onClick={() => dispatch(setModalOpen({ modalName: 'isCalendarModalOpen', isOpen: true }))}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="text-[10px]">Schedule</span>
+        </button>
+
+        {/* Tab 3: Profile Settings */}
+        <button
+          className="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-700 font-medium cursor-pointer"
+          data-tab="settings"
+          type="button"
+          onClick={() => dispatch(setModalOpen({ modalName: 'isGoogleModalOpen', isOpen: true }))}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-[10px]">Settings</span>
+        </button>
+      </nav>
+      {/* END: BottomNavigationDock */}
 
       {/* Add Member Modal */}
       <AddMemberModal
@@ -1113,6 +1259,17 @@ export function App() {
         teamName={activeTeam?.name}
         currentUser={googleUser}
         onSave={handleSaveMemberProfile}
+      />
+
+      {/* Firebase Push & Email Alerts Modal */}
+      <EmailNotificationModal
+        isOpen={modals.isEmailNotifyModalOpen}
+        onClose={() => dispatch(setModalOpen({ modalName: 'isEmailNotifyModalOpen', isOpen: false }))}
+        activeTeam={activeTeam}
+        currentUser={googleUser}
+        tomorrowDateStr={tomorrow.shortDateStr}
+        onToast={showToastMsg}
+        onRegisterPushToken={handleRegisterPushToken}
       />
     </div>
   );

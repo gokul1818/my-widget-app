@@ -1,2 +1,6 @@
+@import '../design-system/css/tokens.css';
+@import '../design-system/css/base.css';
+@import '../design-system/css/components.css';
+@import '../design-system/css/patterns.css';
 @import './styles/reset.css';
 @import './styles/widget.css';

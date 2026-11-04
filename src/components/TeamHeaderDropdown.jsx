@@ -42,29 +42,30 @@ export function TeamHeaderDropdown({
   const joinRequestsCount = activeTeam.joinRequests?.length || 0;
 
   return (
-    <div className="team-dropdown-container" ref={dropdownRef}>
+    <div className="relative inline-block text-left" ref={dropdownRef}>
       <button
         type="button"
-        className="team-selector-btn"
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-sm active:scale-95 transition-transform cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="true"
+        data-purpose="team-picker"
       >
-        <span className="team-selector-emoji">🏢</span>
-        <div className="team-selector-text">
-          <span className="team-selector-name">{activeTeam.name}</span>
-          <span className="team-selector-code">{activeTeam.code}</span>
-        </div>
+        <span className="text-sm">🏢</span>
+        <span className="max-w-[85px] truncate font-bold text-slate-800">{activeTeam.name}</span>
+        <span className="text-[10px] text-slate-400 font-mono">#{activeTeam.code}</span>
         {joinRequestsCount > 0 && (
-          <span className="team-requests-bubble" title={`${joinRequestsCount} pending requests`}>
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold" title={`${joinRequestsCount} pending requests`}>
             {joinRequestsCount}
           </span>
         )}
-        <span className="team-selector-arrow">{isOpen ? '▲' : '▼'}</span>
+        <svg className={`w-3 h-3 text-slate-400 ml-0.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+        </svg>
       </button>
 
       {isOpen && (
-        <div className="team-menu-dropdown" role="menu">
+        <div className="team-menu-dropdown absolute left-0 mt-1.5 w-60 z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-1" role="menu">
           <div className="team-menu-header">
             <span className="team-menu-title">Switch Team</span>
             <span className="team-menu-loc">{activeTeam.location}</span>
