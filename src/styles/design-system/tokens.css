@@ -1,0 +1,97 @@
+/* DESIGN TOKENS. Every colour, size, radius, shadow and duration the kit uses. Nothing else in css/ holds a raw hex or a magic number:
+   change a value here and every component follows. The hues are the logo's (assets/logo.jpeg); the neutrals are the logo's navy
+   tinted down, never grey. See DESIGN.md for the rules that go with these values.
+
+   Text sizes are written px / 15 in rem, because the root size is 15 px up to about 1330 px of width and grows to 18 px on a large
+   display, so type grows with the screen. Write a new size the same way: calc(14rem / 15). */
+:root {
+  /* ---- the logo: eight hues ---- */
+  --navy: #1c417a;      /* primary action, selected state, headings' anchor colour */
+  --blue: #249ed6;      /* focus ring, links' hover, default accent, "Web" */
+  --green: #17974f;     /* success, positive */
+  --amber: #f5a922;     /* warning, attention (takes INK text, never white) */
+  --orange: #e5542b;
+  --red: #de262c;       /* error, destructive, failed */
+  --pink: #e01c62;
+  --plum: #513b6a;
+  /* the same hues darker: use these for TEXT on a light surface and as fills that carry white text (all 4.5:1 or better on white) */
+  --blue-deep: #1b76a0;
+  --green-deep: #148043;
+  --orange-deep: #c34725;
+  --amber-deep: #936514;
+  /* in-between shades for the extra series colours of a chart or a category list */
+  --navy-mid: #2a5aa3;
+  --plum-mid: #6b4f8f;
+  --periwinkle: #5a6fbf;
+
+  /* ---- neutrals: navy tinted down ---- */
+  --page: #f4f6fb;      /* the page behind the cards */
+  --surface: #ffffff;   /* a card, a field, a popover */
+  --ink: #12264a;       /* body text and figures */
+  --muted: #5b6b8a;     /* secondary text, 4.5:1 or better on white and on the page */
+  --faint: #9aa7bd;     /* placeholders and disabled marks ONLY. Fails 3:1 as text: never use it to say something */
+  --border: #e3e8f2;    /* every hairline */
+  --track: #eaeef6;     /* the groove behind a bar, a pressed-out area, the loading skeleton's base */
+  --deep: #0e2447;      /* hover of navy fills, tooltips, the darkest surface */
+
+  /* ---- the names components use. Style with these, not with the raw hues above ---- */
+  --text: var(--ink);
+  --text-secondary: var(--muted);
+  --surface-muted: var(--track);
+  --primary: var(--navy);
+  --primary-hover: var(--deep);
+  --on-primary: var(--surface);
+  --danger: var(--red);
+  --success: var(--green-deep);
+  --warning: var(--amber-deep);
+  /* links and the pressed ghost button: blue-deep pulled toward the ink so it keeps 4.5:1 on a blue-tinted hover row */
+  --link: color-mix(in srgb, var(--blue-deep) 80%, var(--ink));
+  --error: var(--danger);
+  /* the accent of the section you are in: a section's icon tile, its tiles' corner shapes, its insight icons.
+     Set it on any container (style="--accent: var(--green)") and everything inside takes it. */
+  --accent: var(--blue);
+  /* the seven hues as a strip: along the top of a card with a figure in it, and along the foot of the header */
+  --mosaic: linear-gradient(90deg, var(--navy) 0 14.28%, var(--blue) 14.28% 28.56%, var(--green) 28.56% 42.84%, var(--amber) 42.84% 57.12%, var(--orange) 57.12% 71.4%, var(--red) 71.4% 85.68%, var(--pink) 85.68%);
+
+  /* ---- shape ---- */
+  --radius-xs: 6px;     /* a text-like button's focus shape */
+  --radius-sm: 10px;    /* icon tile in a tab, table header corner, tooltip */
+  --radius-md: 14px;    /* a tile, a message bubble */
+  --radius: 16px;       /* a card */
+  --radius-lg: 20px;    /* the header card, the sign-in card, a dialog */
+  --radius-pill: 999px; /* every single-line control and every chip */
+
+  /* ---- depth: two shadows only ---- */
+  --shadow: 0 1px 2px rgba(18, 38, 74, 0.05), 0 10px 24px rgba(18, 38, 74, 0.07);
+  --shadow-lift: 0 2px 4px rgba(18, 38, 74, 0.06), 0 16px 32px rgba(18, 38, 74, 0.12);
+
+  /* ---- space: a 4 px scale, plus the two layout gaps ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --gap: 24px;                        /* between cards */
+  --gutter: clamp(16px, 2vw, 48px);   /* the page's side margin */
+  --content-max: 1920px;
+
+  /* ---- motion: short, ease-out, and off for anyone who asked for less ---- */
+  --duration-fast: 0.15s;   /* hover, colour, border */
+  --duration: 0.2s;         /* a tab chip lighting up */
+  --duration-enter: 0.4s;   /* a card rising into place */
+  --ease: ease-out;
+
+  /* ---- layers ---- */
+  --z-sticky: 10;
+  --z-popover: 20;
+  --z-dialog: 30;
+  --z-toast: 40;
+
+  /* the band of tabs and filters stays in view, so a focused control that scrolls into view stops below it */
+  scroll-padding-top: 8rem;
+
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(15px, 0.6vw + 7px, 18px);
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--page);
+}
+
